@@ -17,7 +17,11 @@ app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 50 }), require('./routes/auth'));
+// Freno a fuerza bruta solo en login/registro y contando solo intentos fallidos: /auth/me se llama en
+// cada carga de página y no debe bloquear a quien navega o recarga mucho (p. ej. desde el teléfono).
+const authLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, skipSuccessfulRequests: true, message: { error: 'Demasiados intentos. Espera unos minutos.' } });
+app.use(['/api/auth/login', '/api/auth/register'], authLimit);
+app.use('/api/auth', require('./routes/auth'));
 
 const api = express.Router();
 api.use(requireAuth);

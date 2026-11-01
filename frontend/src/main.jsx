@@ -1,27 +1,38 @@
-import React from 'react';
+import React, { lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './index.css';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ToastProvider, Loading } from './components/ui';
 import Layout from './components/Layout';
+import { reloadOnceForNewVersion } from './components/ErrorBoundary';
 import { Login, Register } from './pages/Auth';
-import Dashboard from './pages/Dashboard';
-import Invoices from './pages/Invoices';
-import InvoiceEditor from './pages/InvoiceEditor';
-import InvoiceView from './pages/InvoiceView';
-import Expenses from './pages/Expenses';
-import Contacts from './pages/Contacts';
-import Products from './pages/Products';
-import Banks from './pages/Banks';
-import { Accounts, Journal, Ledger } from './pages/Accounting';
-import Reports from './pages/Reports';
-import Taxes from './pages/Taxes';
-import { Budgets, BudgetEditor } from './pages/Budgets';
-import Settings from './pages/Settings';
-import Recurring from './pages/Recurring';
-import Statement from './pages/Statement';
-import Forecast from './pages/Forecast';
+
+// Cada sección se descarga al abrirla: el teléfono carga la app mucho más rápido.
+const page = (load, name = 'default') => lazy(() => load().then((m) => ({ default: m[name] })));
+const Dashboard = page(() => import('./pages/Dashboard'));
+const Invoices = page(() => import('./pages/Invoices'));
+const InvoiceEditor = page(() => import('./pages/InvoiceEditor'));
+const InvoiceView = page(() => import('./pages/InvoiceView'));
+const Expenses = page(() => import('./pages/Expenses'));
+const Contacts = page(() => import('./pages/Contacts'));
+const Products = page(() => import('./pages/Products'));
+const Banks = page(() => import('./pages/Banks'));
+const Accounts = page(() => import('./pages/Accounting'), 'Accounts');
+const Journal = page(() => import('./pages/Accounting'), 'Journal');
+const Ledger = page(() => import('./pages/Accounting'), 'Ledger');
+const Reports = page(() => import('./pages/Reports'));
+const Taxes = page(() => import('./pages/Taxes'));
+const Budgets = page(() => import('./pages/Budgets'), 'Budgets');
+const BudgetEditor = page(() => import('./pages/Budgets'), 'BudgetEditor');
+const Settings = page(() => import('./pages/Settings'));
+const Recurring = page(() => import('./pages/Recurring'));
+const Statement = page(() => import('./pages/Statement'));
+const Forecast = page(() => import('./pages/Forecast'));
+
+// Vite avisa cuando un archivo de una versión anterior ya no existe (después de publicar)
+window.addEventListener('vite:preloadError', (e) => { if (reloadOnceForNewVersion()) e.preventDefault(); });
+window.addEventListener('load', () => setTimeout(() => { try { sessionStorage.removeItem('ledger.reloaded'); } catch { /* */ } }, 10000));
 
 function App() {
   const { ready, session } = useAuth();

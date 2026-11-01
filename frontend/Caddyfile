@@ -31,6 +31,9 @@
 		root * /srv
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# index.html y rutas de la app siempre frescos: tras publicar, el teléfono carga la versión nueva
+		@app not path /assets/*
+		header @app Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

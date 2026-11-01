@@ -27,9 +27,11 @@ export function Field({ label, hint, children, className }) {
   );
 }
 
-export const Input = (p) => <input {...p} className={cx('input', p.className)} />;
-export const Select = ({ children, ...p }) => <select {...p} className={cx('input', p.className)}>{children}</select>;
-export const Textarea = (p) => <textarea rows={3} {...p} className={cx('input', p.className)} />;
+// Un valor null/undefined se muestra vacío (evita el cambio de "no controlado" a "controlado")
+const val = (p) => ('value' in p ? { value: p.value ?? '' } : {});
+export const Input = (p) => <input {...p} {...val(p)} className={cx('input', p.className)} />;
+export const Select = ({ children, ...p }) => <select {...p} {...val(p)} className={cx('input', p.className)}>{children}</select>;
+export const Textarea = (p) => <textarea rows={3} {...p} {...val(p)} className={cx('input', p.className)} />;
 
 export function MoneyInput({ value, onChange, ...p }) {
   return (
@@ -76,15 +78,15 @@ export function Card({ title, eyebrow, actions, children, className, pad = true 
   return (
     <section className={cx('card', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
-          <div>
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 pt-4 pb-3">
+          <div className="min-w-0">
             {eyebrow && <div className="eyebrow mb-0.5">{eyebrow}</div>}
             {title && <h3 className="text-[16px] font-semibold">{title}</h3>}
           </div>
           {actions}
         </header>
       )}
-      <div className={pad ? 'px-5 pb-5' : ''}>{children}</div>
+      <div className={pad ? 'px-5 pb-5' : 'overflow-x-auto'}>{children}</div>
     </section>
   );
 }
@@ -101,12 +103,12 @@ export function Modal({ open, onClose, title, children, footer, wide }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
       <div className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]" onClick={onClose} />
       <div className={cx('relative w-full bg-surface rounded-t-2xl sm:rounded-2xl shadow-pop max-h-[92vh] flex flex-col', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
-        <header className="flex items-center justify-between px-6 pt-5 pb-3">
+        <header className="flex items-center justify-between gap-3 px-5 sm:px-6 pt-5 pb-3">
           <h3 className="text-[19px] font-semibold">{title}</h3>
           <button onClick={onClose} className="btn-ghost btn-sm -mr-2" aria-label="Cerrar"><X size={16} /></button>
         </header>
-        <div className="px-6 pb-5 overflow-y-auto">{children}</div>
-        {footer && <footer className="flex justify-end gap-2 px-6 py-4 border-t border-line bg-paper/50 rounded-b-2xl">{footer}</footer>}
+        <div className="px-5 sm:px-6 pb-5 overflow-y-auto overscroll-contain">{children}</div>
+        {footer && <footer className="flex flex-wrap justify-end gap-2 px-5 sm:px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-line bg-paper/50 sm:rounded-b-2xl">{footer}</footer>}
       </div>
     </div>
   );

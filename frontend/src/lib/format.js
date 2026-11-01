@@ -2,7 +2,7 @@ export const money = (n, currency = 'DOP', opts = {}) => {
   const v = Number(n || 0);
   const s = new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(v));
   const sym = currency === 'USD' ? 'US$' : 'RD$';
-  return `${v < 0 ? '−' : ''}${opts.symbol === false ? '' : sym + ' '}${s}`;
+  return `${v < 0 ? '−' : ''}${opts.symbol === false ? '' : sym + ' '}${s}`; // espacio que no se corta: "RD$" nunca queda solo en una línea
 };
 
 export const compact = (n) => {

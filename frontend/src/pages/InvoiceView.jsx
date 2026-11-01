@@ -134,7 +134,7 @@ function LetterSheet({ inv, company, logo, quote }) {
   const accent = company.accent_color || '#8B2FC9';
   const showItbis = company.charges_itbis;
   return (
-    <article className="print-sheet card bg-white p-6 sm:p-10 max-w-[860px] w-full mx-auto text-[13px] text-[#111]">
+    <article className="print-sheet card bg-white p-4 sm:p-10 max-w-[860px] w-full mx-auto text-[13px] text-[#111]">
       {inv.status === 'void' && <div className="mb-6 rounded-md border-2 border-danger text-danger text-center font-display font-semibold tracking-widest py-1">ANULADA</div>}
       {inv.status === 'draft' && <div className="mb-6 rounded-md border border-dashed border-line-strong text-text-muted text-center text-[12px] py-1 no-print">Borrador — aún no tiene validez</div>}
       <header className="flex flex-col sm:flex-row justify-between gap-6 pb-6" style={{ borderBottom: `3px solid ${accent}` }}>
@@ -182,7 +182,7 @@ function LetterSheet({ inv, company, logo, quote }) {
         </dl>
       </section>
 
-      <table className="w-full text-[12.5px]">
+      <div className="doc-scroll"><table className="w-full min-w-[540px] text-[12.5px]">
         <thead>
           <tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.12em] text-[#666]" style={{ borderBottom: '1.5px solid #111' }}>
             <th className="py-2 pr-2">Descripción</th><th className="py-2 px-2 text-right">Cant.</th><th className="py-2 px-2 text-right">Precio</th>
@@ -201,7 +201,7 @@ function LetterSheet({ inv, company, logo, quote }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
 
       <section className="grid sm:grid-cols-[1fr_280px] gap-8 mt-6">
         <div className="text-[12px] text-[#444] space-y-3">

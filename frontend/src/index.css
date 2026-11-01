@@ -3,7 +3,11 @@
 @tailwind utilities;
 
 @layer base {
-  html { -webkit-font-smoothing: antialiased; }
+  html { -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { overflow-x: clip; }
+  /* Grid y flex no encogen a sus hijos por debajo del contenido: una tabla o un select largo empujaría la página */
+  .grid > * { min-width: 0; }
+  img, svg, canvas { max-width: 100%; }
   body { @apply bg-paper text-text font-sans text-[14px] leading-relaxed; }
   h1, h2, h3 { @apply font-display tracking-tight; }
   ::selection { background: #E0359A; color: #FFFFFF; }
@@ -15,7 +19,7 @@
   .eyebrow { @apply font-mono text-[10.5px] uppercase tracking-[0.14em] text-text-faint; }
 
   .input {
-    @apply w-full h-10 rounded-lg border border-line bg-surface px-3 text-[14px] text-text placeholder:text-text-faint
+    @apply w-full min-w-0 h-10 rounded-lg border border-line bg-surface px-3 text-[16px] sm:text-[14px] text-text placeholder:text-text-faint
            outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10 disabled:bg-paper disabled:text-text-muted;
   }
   textarea.input { @apply h-auto py-2; }
@@ -48,6 +52,9 @@
 }
 
 /* Impresión: solo el documento */
+/* Tablas de documentos (factura, estado de cuenta): en el teléfono se desplazan dentro de la hoja */
+.doc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 /* Margen de página 0: el navegador no imprime URL ni fecha; el margen lo pone cada hoja. */
 @media print {
   @page { size: letter; margin: 0; }
@@ -58,5 +65,7 @@
   .print-sheet { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; padding: 12mm 14mm !important; }
   .print-ticket { width: 72mm !important; padding: 0 !important; }
   thead { display: table-header-group; }
+  .doc-scroll { overflow: visible !important; }
+  .doc-scroll table { min-width: 0 !important; }
   tr, .break-inside-avoid { break-inside: avoid; }
 }

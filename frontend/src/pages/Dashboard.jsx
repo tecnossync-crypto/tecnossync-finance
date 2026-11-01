@@ -70,11 +70,11 @@ export default function Dashboard() {
           <div className="relative grid grid-cols-2 gap-4 mt-8 pt-5 border-t border-ink-line">
             <div>
               <div className="flex items-center gap-1.5 text-white/50 text-[12.5px]"><ArrowUpRight size={14} className="text-lime" /> Ingresos</div>
-              <div className="num text-[20px] font-semibold mt-1">{money(data.month.income)}</div>
+              <div className="num text-[16px] sm:text-[20px] font-semibold mt-1">{money(data.month.income)}</div>
             </div>
             <div>
               <div className="flex items-center gap-1.5 text-white/50 text-[12.5px]"><ArrowDownRight size={14} className="text-[#FF8F86]" /> Gastos</div>
-              <div className="num text-[20px] font-semibold mt-1">{money(data.month.expense)}</div>
+              <div className="num text-[16px] sm:text-[20px] font-semibold mt-1">{money(data.month.expense)}</div>
             </div>
           </div>
         </section>
@@ -168,7 +168,7 @@ function MiniStat({ label, value, foot, to, icon: Icon }) {
         <span className="eyebrow">{label}</span>
         {Icon ? <Icon size={15} className="text-text-faint group-hover:text-brand transition" /> : <ArrowUpRight size={15} className="text-text-faint group-hover:text-brand transition" />}
       </div>
-      <div className="num text-[18px] sm:text-[22px] font-semibold mt-auto pt-4 leading-none">{money(value)}</div>
+      <div className="num text-[15px] sm:text-[22px] font-semibold mt-auto pt-4 leading-none">{money(value)}</div>
       <div className="text-[12px] text-text-muted mt-2">{foot}</div>
     </Link>
   );

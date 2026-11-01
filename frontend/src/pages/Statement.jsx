@@ -56,7 +56,7 @@ export default function Statement() {
         </div>
       </div>
 
-      <article className="print-sheet card bg-white p-6 sm:p-10 max-w-[900px] w-full mx-auto text-[13px] text-[#111]">
+      <article className="print-sheet card bg-white p-4 sm:p-10 max-w-[900px] w-full mx-auto text-[13px] text-[#111]">
         <header className="flex flex-col sm:flex-row justify-between gap-6 pb-6" style={{ borderBottom: `3px solid ${accent}` }}>
           <div className="flex gap-4">
             {logo && <img src={logo} alt="" className="h-16 w-16 object-contain" />}
@@ -97,7 +97,7 @@ export default function Statement() {
           </div>
         </section>
 
-        <table className="w-full text-[12.5px]">
+        <div className="doc-scroll"><table className="w-full min-w-[540px] text-[12.5px]">
           <thead>
             <tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.12em] text-[#666]" style={{ borderBottom: '1.5px solid #111' }}>
               <th className="py-2 pr-2">Fecha</th><th className="py-2 px-2">Documento</th><th className="py-2 px-2">Detalle</th>
@@ -124,12 +124,12 @@ export default function Statement() {
             ))}
             {data.lines.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-[#777]">Sin movimientos en el período.</td></tr>}
           </tbody>
-        </table>
+        </table></div>
 
         {data.open.length > 0 && (
           <section className="mt-8">
             <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#777] mb-2">Documentos pendientes al día de hoy</div>
-            <table className="w-full text-[12.5px]">
+            <div className="doc-scroll"><table className="w-full min-w-[540px] text-[12.5px]">
               <thead><tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.12em] text-[#666] border-b border-[#bbb]">
                 <th className="py-1.5 pr-2">Documento</th><th className="py-1.5 px-2">Fecha</th><th className="py-1.5 px-2">Vence</th>
                 <th className="py-1.5 px-2 text-right">Días vencido</th><th className="py-1.5 pl-2 text-right">Pendiente</th>
@@ -145,8 +145,8 @@ export default function Statement() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-            <div className="grid grid-cols-5 mt-4 rounded-lg overflow-hidden border border-[#ddd] text-center">
+            </table></div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 mt-4 rounded-lg overflow-hidden border border-[#ddd] text-center">
               {AGING.map(([k, l]) => (
                 <div key={k} className="py-2.5 px-1 border-r last:border-r-0 border-[#ddd]">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-[#777]">{l}</div>

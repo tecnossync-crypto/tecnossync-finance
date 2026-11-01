@@ -331,8 +331,8 @@ function RecurringFields({ form, set }) {
         <Toggle checked={form.period_label} onChange={(v) => set({ period_label: v })} label="Agregar el período a cada línea" hint="Ej. «Mantenimiento mensual — noviembre 2026»" />
       </div>
       {dates.length > 0 && (
-        <div className="sm:col-span-2 lg:col-span-4 rounded-lg bg-paper px-3 py-2.5 text-[12.5px] text-text-muted">
-          Próximos cobros: {dates.map((d) => <span key={d} className="num text-text font-medium mr-3">{d.split('-').reverse().join('/')}</span>)}
+        <div className="sm:col-span-2 lg:col-span-4 rounded-lg bg-paper px-3 py-2.5 text-[12.5px] text-text-muted flex flex-wrap gap-x-3 gap-y-1">
+          <span>Próximos cobros:</span>{dates.map((d) => <span key={d} className="num text-text font-medium">{d.split('-').reverse().join('/')}</span>)}
         </div>
       )}
     </>

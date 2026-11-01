@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Suspense, useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, FileText, FileSignature, Receipt, Users, Package, Landmark, PieChart, BookOpen, Library,
   BarChart3, Building2, Settings, LogOut, ChevronsUpDown, Menu, X, Plus, Check, Scale, Repeat, TrendingUp,
@@ -8,7 +8,8 @@ import { Logo } from './Logo';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { ROLES } from '../lib/constants';
-import { cx, Modal, Field, Input, Toggle, useToast } from './ui';
+import { cx, Modal, Field, Input, Toggle, useToast, Loading } from './ui';
+import ErrorBoundary from './ErrorBoundary';
 
 const NAV = [
   { section: 'General', items: [['/', 'Resumen', LayoutGrid]] },
@@ -79,7 +80,7 @@ function Sidebar({ onNavigate }) {
   const { company, user, logout, can } = useAuth();
   return (
     <div className="h-full flex flex-col bg-ink text-white">
-      <div className="px-5 pt-5 pb-4"><Logo /></div>
+      <div className="px-5 pt-[calc(env(safe-area-inset-top)+20px)] pb-4"><Logo /></div>
       <div className="px-3 pb-3"><CompanySwitcher onDone={onNavigate} /></div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
         {NAV.map((g) => (
@@ -119,25 +120,33 @@ function Sidebar({ onNavigate }) {
 export default function Layout() {
   const [mobile, setMobile] = useState(false);
   const { company } = useAuth();
+  const { pathname } = useLocation();
+  // el menú del teléfono se cierra al cambiar de pantalla y bloquea el scroll de fondo mientras está abierto
+  useEffect(() => { setMobile(false); window.scrollTo(0, 0); }, [pathname]);
+  useEffect(() => { document.body.style.overflow = mobile ? 'hidden' : ''; return () => { document.body.style.overflow = ''; }; }, [mobile]);
   return (
     <div className="min-h-screen lg:pl-[264px]">
       <aside className="hidden lg:block fixed inset-y-0 left-0 w-[264px] no-print"><Sidebar /></aside>
-      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between h-14 px-4 bg-ink no-print">
-        <Logo />
-        <button onClick={() => setMobile(true)} className="h-9 w-9 grid place-items-center rounded-lg text-white"><Menu size={20} /></button>
+      <div className="lg:hidden sticky top-0 z-40 bg-ink no-print pt-[env(safe-area-inset-top)]">
+        <div className="flex items-center justify-between h-14 pl-4 pr-2">
+          <Logo />
+          <button onClick={() => setMobile(true)} className="h-11 w-11 grid place-items-center rounded-lg text-white" aria-label="Abrir menú"><Menu size={22} /></button>
+        </div>
       </div>
       {mobile && (
         <div className="fixed inset-0 z-50 lg:hidden no-print">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobile(false)} />
           <div className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw]">
-            <button onClick={() => setMobile(false)} className="absolute right-3 top-5 z-10 text-white/70"><X size={18} /></button>
+            <button onClick={() => setMobile(false)} className="absolute right-2 top-[calc(env(safe-area-inset-top)+12px)] z-10 h-10 w-10 grid place-items-center text-white/70" aria-label="Cerrar menú"><X size={20} /></button>
             <Sidebar onNavigate={() => setMobile(false)} />
           </div>
         </div>
       )}
-      <main className="px-4 sm:px-8 py-7 sm:py-9 max-w-[1320px] mx-auto">
+      <main className="px-4 sm:px-8 pt-6 sm:pt-9 pb-[max(2rem,env(safe-area-inset-bottom))] max-w-[1320px] mx-auto">
         {!company?.is_formal && <InformalHint />}
-        <Outlet />
+        <ErrorBoundary resetKey={pathname}>
+          <Suspense fallback={<Loading />}><Outlet /></Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );
