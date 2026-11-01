@@ -55,6 +55,13 @@
 /* Tablas de documentos (factura, estado de cuenta): en el teléfono se desplazan dentro de la hoja */
 .doc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* Hoja armada para descargar en PDF (mismas reglas que al imprimir) */
+.pdf-render { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; margin: 0 !important; max-width: none !important; padding: 12mm 14mm !important; }
+.pdf-render.print-ticket { padding: 0 0 8px !important; }
+.pdf-render .no-print { display: none !important; }
+.pdf-render .doc-scroll { overflow: visible !important; }
+.pdf-render .doc-scroll table { min-width: 0 !important; }
+
 /* Margen de página 0: el navegador no imprime URL ni fecha; el margen lo pone cada hoja. */
 @media print {
   @page { size: letter; margin: 0; }

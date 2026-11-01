@@ -5,6 +5,7 @@ import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateShort, money, today } from '../lib/format';
 import { ErrorBox, Input, Loading, Tabs, useData, cx } from '../components/ui';
+import PdfButton from '../components/PdfButton';
 
 const KIND = { invoice: 'Factura', credit_note: 'Nota de crédito', payment: 'Pago recibido', expense: 'Compra / gasto' };
 const AGING = [['current', 'Al día'], ['d30', '1–30 días'], ['d60', '31–60 días'], ['d90', '61–90 días'], ['d90p', '+90 días']];
@@ -55,7 +56,8 @@ export default function Statement() {
           <Input type="date" className="w-[150px]" value={from} onChange={(e) => setParam('desde', e.target.value)} />
           <span className="text-text-faint">→</span>
           <Input type="date" className="w-[150px]" value={to} onChange={(e) => setParam('hasta', e.target.value)} />
-          <button className="btn-primary" onClick={() => window.print()}><Printer size={15} /> Imprimir / PDF</button>
+          <button className="btn-ghost" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
+          <PdfButton />
         </div>
       </div>
 

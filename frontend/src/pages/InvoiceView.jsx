@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth';
 import { money, date, dateShort, today, amountInWords, round2, invoiceAmounts } from '../lib/format';
 import { INVOICE_STATUS, QUOTE_STATUS, NCF_TITLE, PAY_METHODS } from '../lib/constants';
 import { RateField, useUsdRate } from '../components/Currency';
+import PdfButton from '../components/PdfButton';
 import { Field, Input, Loading, Modal, Select, StatusBadge, useData, useToast, ErrorBox, Tabs, Money, cx } from '../components/ui';
 
 export default function InvoiceView({ quote }) {
@@ -78,7 +79,8 @@ export default function InvoiceView({ quote }) {
           {!quote && !['void', 'draft'].includes(inv.status) && can('accountant') && (
             <button className="btn-danger" onClick={() => setVoiding(true)}><Ban size={15} /> Anular</button>
           )}
-          <button className="btn-primary" onClick={() => window.print()}><Printer size={15} /> Imprimir / PDF</button>
+          <button className="btn-ghost" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
+          <PdfButton ticket={format === 'ticket'} />
         </div>
       </div>
 

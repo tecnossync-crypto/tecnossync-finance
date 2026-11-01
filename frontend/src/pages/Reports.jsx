@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, date, today } from '../lib/format';
 import { Field, Input, Loading, Money, PageHeader, Tabs, useData, cx, Badge } from '../components/ui';
+import PdfButton from '../components/PdfButton';
 
 const TABS = [['pl', 'Estado de resultados'], ['bs', 'Balance general'], ['tb', 'Balanza de comprobación'], ['ar', 'Cuentas por cobrar'], ['ap', 'Cuentas por pagar']];
 
@@ -15,7 +16,10 @@ export default function Reports() {
   return (
     <>
       <PageHeader eyebrow="Contabilidad · Reportes" title="Estados financieros"
-        actions={<button className="btn-outline no-print" onClick={() => window.print()}><Printer size={15} /> Imprimir</button>} />
+        actions={<>
+          <button className="btn-ghost no-print" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
+          <PdfButton className="btn-outline" name={`${TABS.find(([k]) => k === tab)[1]} ${company.name} ${to}`} />
+        </>} />
       <div className="no-print flex flex-wrap items-end justify-between gap-3 mb-5">
         <Tabs tabs={TABS} value={tab} onChange={setTab} />
         {['pl', 'tb', 'bs'].includes(tab) && (
