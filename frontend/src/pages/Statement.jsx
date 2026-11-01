@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateShort, money, today } from '../lib/format';
@@ -56,7 +56,6 @@ export default function Statement() {
           <Input type="date" className="w-[150px]" value={from} onChange={(e) => setParam('desde', e.target.value)} />
           <span className="text-text-faint">→</span>
           <Input type="date" className="w-[150px]" value={to} onChange={(e) => setParam('hasta', e.target.value)} />
-          <button className="btn-ghost" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
           <PdfButton />
         </div>
       </div>

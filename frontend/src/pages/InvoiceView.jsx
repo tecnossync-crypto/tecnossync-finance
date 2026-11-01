@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus, Repeat, ScrollText } from 'lucide-react';
+import { ArrowLeft, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus, Repeat, ScrollText } from 'lucide-react';
 import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, date, dateShort, today, amountInWords, round2, invoiceAmounts } from '../lib/format';
@@ -79,7 +79,6 @@ export default function InvoiceView({ quote }) {
           {!quote && !['void', 'draft'].includes(inv.status) && can('accountant') && (
             <button className="btn-danger" onClick={() => setVoiding(true)}><Ban size={15} /> Anular</button>
           )}
-          <button className="btn-ghost" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
           <PdfButton ticket={format === 'ticket'} />
         </div>
       </div>

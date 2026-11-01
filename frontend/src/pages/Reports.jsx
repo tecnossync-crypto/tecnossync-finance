@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Printer, Check, AlertTriangle } from 'lucide-react';
+import { Check, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, date, today } from '../lib/format';
@@ -17,7 +17,6 @@ export default function Reports() {
     <>
       <PageHeader eyebrow="Contabilidad · Reportes" title="Estados financieros"
         actions={<>
-          <button className="btn-ghost no-print" onClick={() => window.print()} title="Imprimir"><Printer size={15} /></button>
           <PdfButton className="btn-outline" name={`${TABS.find(([k]) => k === tab)[1]} ${company.name} ${to}`} />
         </>} />
       <div className="no-print flex flex-wrap items-end justify-between gap-3 mb-5">
