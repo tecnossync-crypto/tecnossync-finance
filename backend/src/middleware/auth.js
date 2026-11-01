@@ -2,6 +2,11 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../db');
 
 const SECRET = process.env.JWT_SECRET || 'dev-secret-cambiar';
+// En producción no se arranca con un secreto débil o de ejemplo: cualquiera podría firmar sesiones.
+if (process.env.NODE_ENV === 'production' && (SECRET.length < 32 || /cambia|dev-secret/.test(SECRET))) {
+  console.error('JWT_SECRET falta o es inseguro (mínimo 32 caracteres). Genera uno con: openssl rand -hex 32');
+  process.exit(1);
+}
 
 const sign = (userId, companyId) => jwt.sign({ uid: userId, cid: companyId }, SECRET, { expiresIn: '7d' });
 

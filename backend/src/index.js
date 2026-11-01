@@ -8,7 +8,9 @@ const { requireAuth } = require('./middleware/auth');
 const { migrate } = require('./db/migrate');
 
 const app = express();
-app.set('trust proxy', 1);
+// Confía en los proxies de la red privada (Caddy propio y, en servidor compartido, el Caddy
+// de la otra app): así req.ip es el cliente real y el límite de intentos de login es por usuario.
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
 app.use(express.json({ limit: '2mb' }));

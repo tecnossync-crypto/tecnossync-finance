@@ -1,0 +1,52 @@
+# Producción en un solo servidor (EC2): PostgreSQL + API + web con HTTPS automático.
+# Uso: cp .env.production.example .env.production  (y rellenar)  →  ./deploy/deploy.sh
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cuadre
+      POSTGRES_DB: cuadre
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cuadre -d cuadre"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cuadre:${DB_PASSWORD}@db:5432/cuadre
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET}
+      CORS_ORIGIN: https://${DOMAIN}
+    volumes:
+      - uploads:/data/uploads
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-${DOMAIN:?Falta DOMAIN}}
+      ACME_EMAIL: ${ACME_EMAIL:?Falta ACME_EMAIL}
+    # Por defecto toma 80/443. En un servidor que ya tiene nginx, ver .env.production.example
+    ports:
+      - "${HTTP_BIND:-80}:80"
+      - "${HTTPS_BIND:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

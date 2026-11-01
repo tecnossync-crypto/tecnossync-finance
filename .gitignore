@@ -4,3 +4,5 @@ uploads
 .env
 dist
 *.log
+.env.production
+backups

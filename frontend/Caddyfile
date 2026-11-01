@@ -1,0 +1,37 @@
+{
+	email {$ACME_EMAIL}
+	# Detrás del Caddy de otra app, conserva la IP real del cliente (X-Forwarded-For)
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# Servidor propio: el dominio (Caddy saca el HTTPS). Servidor compartido: ":80" y el
+# nginx que ya existe se encarga del HTTPS y le reenvía el tráfico.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# Comprobantes de hasta 10 MB + margen
+	request_body {
+		max_size 15MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:4100
+	}
+
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,15 @@
+# Servidor compartido: conecta SOLO la web de Cuadre a la red del proxy que ya existe
+# (p. ej. el Caddy de voz-ia), que la alcanza como "cuadre-web:80". La base de datos y
+# la API siguen en la red privada de Cuadre. deploy.sh lo usa cuando PROXY_NETWORK está definido.
+services:
+  web:
+    networks:
+      default: {}
+      proxy:
+        aliases:
+          - cuadre-web
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?Falta PROXY_NETWORK}
