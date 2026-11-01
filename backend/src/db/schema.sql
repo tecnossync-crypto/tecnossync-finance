@@ -274,3 +274,11 @@ CREATE TABLE IF NOT EXISTS recurring_invoices (
 CREATE INDEX IF NOT EXISTS rec_due ON recurring_invoices(next_date) WHERE active;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_id INTEGER REFERENCES recurring_invoices(id) ON DELETE SET NULL;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS period TEXT;
+
+-- Descuento al cobrar: comisión de una plataforma/pasarela (gasto) o retención de impuesto del cliente.
+-- amount = lo que entra al banco; amount + fee = lo que se descuenta de la factura.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fee NUMERIC(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fee_type TEXT CHECK (fee_type IN ('commission','withholding'));
+-- Descuento habitual de un cliente, para precargarlo al registrar el cobro
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS payment_fee_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS payment_fee_type TEXT CHECK (payment_fee_type IN ('commission','withholding'));

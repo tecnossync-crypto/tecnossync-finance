@@ -189,11 +189,15 @@ router.get('/dgii/607', async (req, res) => {
   const { p, from, to } = period(req.query);
   const { rows } = await query(
     `SELECT i.*, c.tax_id, c.id_type, r.ncf AS ref_ncf,
-            (SELECT json_object_agg(method, s) FROM (SELECT method, SUM(amount) s FROM payments WHERE invoice_id=i.id GROUP BY method) x) AS pays
+            -- la comisión la pagó el cliente por ese medio; la retención va a su columna de ISR retenido
+            (SELECT json_object_agg(method, s) FROM (SELECT method, SUM(amount + CASE WHEN fee_type='commission' THEN fee ELSE 0 END) s
+               FROM payments WHERE invoice_id=i.id GROUP BY method) x) AS pays,
+            (SELECT COALESCE(SUM(fee),0) FROM payments WHERE invoice_id=i.id AND fee_type='withholding') AS pay_withheld
        FROM invoices i LEFT JOIN contacts c ON c.id=i.contact_id LEFT JOIN invoices r ON r.id=i.ref_invoice_id
       WHERE i.company_id=$1 AND i.doc_type IN ('invoice','credit_note') AND i.status NOT IN ('draft','void') AND i.ncf IS NOT NULL
         AND i.date BETWEEN $2 AND $3 ORDER BY i.date`, [req.cid, from, to]
   );
+  for (const i of rows) i.isr_retained = round(Number(i.isr_retained) + Number(i.pay_withheld || 0));
   const records = rows.map((i) => {
     // las notas de crédito no llevan forma de pago; las retenciones no son venta a crédito
     const pays = i.doc_type === 'credit_note' ? {} : i.pays || {};

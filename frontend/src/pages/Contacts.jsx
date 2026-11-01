@@ -37,6 +37,14 @@ export function ContactModal({ open, onClose, onSaved, contact, defaultKind = 'c
         <Field label="Teléfono"><Input value={form.phone || ''} onChange={(e) => set({ phone: e.target.value })} /></Field>
         <Field label="Correo"><Input type="email" value={form.email || ''} onChange={(e) => set({ email: e.target.value })} /></Field>
         <Field label="Dirección" className="col-span-2"><Input value={form.address || ''} onChange={(e) => set({ address: e.target.value })} /></Field>
+        {form.kind !== 'supplier' && <>
+          <Field label="Descuento habitual al cobrarle" hint="Se precarga al registrar sus cobros">
+            <Select value={form.payment_fee_type || ''} onChange={(e) => set({ payment_fee_type: e.target.value || null, ...(!e.target.value && { payment_fee_pct: 0 }) })}>
+              <option value="">Ninguno</option><option value="commission">Comisión o cargo</option><option value="withholding">Retención de impuesto</option>
+            </Select>
+          </Field>
+          <Field label="Porcentaje"><Input type="number" step="0.01" min="0" max="100" className="num" disabled={!form.payment_fee_type} value={form.payment_fee_pct || ''} onChange={(e) => set({ payment_fee_pct: e.target.value })} placeholder="15" /></Field>
+        </>}
         <Field label="Notas" className="col-span-2"><Textarea rows={2} value={form.notes || ''} onChange={(e) => set({ notes: e.target.value })} /></Field>
         <div className="col-span-2"><ErrorBox error={error} /></div>
       </div>

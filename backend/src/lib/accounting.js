@@ -134,9 +134,17 @@ async function postPayment(client, company, pay, label, userId) {
   );
   if (!bank) throw new AppError(400, 'Cuenta de banco/caja inválida');
   const counter = await accountByKey(client, cid, pay.direction === 'in' ? 'ar' : 'ap');
-  const lines = pay.direction === 'in'
-    ? [{ account_id: bank.account_id, debit: pay.amount }, { account_id: counter, credit: pay.amount }]
-    : [{ account_id: counter, debit: pay.amount }, { account_id: bank.account_id, credit: pay.amount }];
+  const fee = round(pay.fee || 0);
+  let lines;
+  if (pay.direction === 'in') {
+    // Cobro con descuento: al banco entra lo recibido, el descuento va a gasto (comisión) o a
+    // impuesto adelantado (retención), y la cuenta por cobrar baja por el total.
+    const feeAcc = fee > 0 && await accountByKey(client, cid, pay.fee_type === 'withholding' ? 'isr_withheld_by_customers' : 'bank_fees');
+    lines = [{ account_id: bank.account_id, debit: pay.amount }, fee > 0 && { account_id: feeAcc, debit: fee },
+      { account_id: counter, credit: round(Number(pay.amount) + fee) }].filter((l) => l && (l.debit || l.credit));
+  } else {
+    lines = [{ account_id: counter, debit: pay.amount }, { account_id: bank.account_id, credit: pay.amount }];
+  }
   return postEntry(client, cid, {
     date: pay.date, userId, source_type: 'payment', source_id: pay.id,
     description: `${pay.direction === 'in' ? 'Cobro' : 'Pago'} ${label}`, lines,

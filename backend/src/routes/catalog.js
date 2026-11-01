@@ -18,12 +18,13 @@ router.get('/contacts', async (req, res) => {
   res.json(rows);
 });
 
-const CONTACT = ['kind', 'name', 'id_type', 'tax_id', 'email', 'phone', 'address', 'notes'];
+const CONTACT = ['kind', 'name', 'id_type', 'tax_id', 'email', 'phone', 'address', 'notes', 'payment_fee_pct', 'payment_fee_type'];
 
 router.post('/contacts', allow('operator'), async (req, res) => {
   if (!req.body.name) return res.status(400).json({ error: 'Nombre requerido' });
   const v = CONTACT.map((f) => req.body[f] ?? null);
   v[0] = v[0] || 'customer'; v[2] = v[2] || 'none';
+  v[8] = Number(v[8]) || 0; // payment_fee_pct es NOT NULL
   const { rows: [c] } = await query(
     `INSERT INTO contacts (company_id, ${CONTACT.join(',')}) VALUES ($1,${CONTACT.map((_, i) => `$${i + 2}`).join(',')}) RETURNING *`,
     [req.cid, ...v]

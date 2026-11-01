@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus, Repeat, ScrollText } from 'lucide-react';
 import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { money, date, dateShort, today, amountInWords } from '../lib/format';
+import { money, date, dateShort, today, amountInWords, round2 } from '../lib/format';
 import { INVOICE_STATUS, QUOTE_STATUS, NCF_TITLE, PAY_METHODS } from '../lib/constants';
 import { Field, Input, Loading, Modal, Select, StatusBadge, useData, useToast, ErrorBox, Tabs, Money, cx } from '../components/ui';
 
@@ -104,7 +104,11 @@ export default function InvoiceView({ quote }) {
               <ul className="space-y-3">
                 {inv.payments.map((p) => (
                   <li key={p.id} className="flex items-start justify-between gap-2 text-[13px]">
-                    <div><div className="font-semibold">{money(p.amount)}</div><div className="text-text-muted text-[12px]">{date(p.date)} · {p.bank_name}{p.reference ? ` · ${p.reference}` : ''}</div></div>
+                    <div>
+                      <div className="font-semibold">{money(p.amount + p.fee)}</div>
+                      <div className="text-text-muted text-[12px]">{date(p.date)} · {p.bank_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+                      {p.fee > 0 && <div className="text-[12px] text-text-muted">Recibido {money(p.amount)} · {p.fee_type === 'withholding' ? 'retención' : 'comisión'} {money(p.fee)}</div>}
+                    </div>
                     {can('accountant') && <button className="text-text-faint hover:text-danger" title="Eliminar cobro" onClick={() => act(() => api.del(`/invoices/${id}/payments/${p.id}`), 'Cobro eliminado')}><Trash2 size={14} /></button>}
                   </li>
                 ))}
@@ -115,7 +119,8 @@ export default function InvoiceView({ quote }) {
         </aside>
       </div>
 
-      <PaymentModal open={paying} onClose={() => setPaying(false)} balance={balance}
+      <PaymentModal open={paying} onClose={() => setPaying(false)} balance={balance} allowFee
+        feeDefaults={{ pct: inv.contact_fee_pct, type: inv.contact_fee_type }}
         onSave={async (body) => { await api.post(`/invoices/${id}/payments`, body); setPaying(false); toast('Cobro registrado'); reload(); }} title="Registrar cobro" />
       <VoidModal open={voiding} onClose={() => setVoiding(false)} ncf={inv.ncf}
         onConfirm={async (reason) => { await api.post(`/invoices/${id}/void`, { reason }); setVoiding(false); toast('Factura anulada'); reload(); }} />
@@ -283,25 +288,62 @@ const Line = ({ label, value, c, bold }) => (
   <div className={cx('flex justify-between py-1', bold && 'font-semibold')}><span className="text-[#555]">{label}</span><span className="num">{money(value, c)}</span></div>
 );
 
-export function PaymentModal({ open, onClose, onSave, balance, title }) {
+const FEE_TYPES = [['', 'Ninguno'], ['commission', 'Comisión'], ['withholding', 'Retención']];
+
+// Cobro (o pago). Con allowFee, el cobro puede venir con un descuento: comisión de una plataforma o
+// pasarela (va a gasto) o retención del cliente (impuesto adelantado). La factura baja por el total.
+export function PaymentModal({ open, onClose, onSave, balance, title, allowFee, feeDefaults }) {
   const [banks, setBanks] = useState([]);
   const [form, setForm] = useState({});
   const [error, setError] = useState(null);
   useEffect(() => {
     if (!open) return;
     setError(null);
-    api.get('/banks').then((b) => { setBanks(b); setForm({ amount: balance.toFixed(2), date: today(), method: 'transfer', bank_account_id: b.find((x) => x.kind === 'bank')?.id || b[0]?.id, reference: '' }); });
-  }, [open, balance]);
-  const save = async () => { try { await onSave(form); } catch (e) { setError(e); } };
+    const pct = allowFee && feeDefaults?.pct ? Number(feeDefaults.pct) : 0;
+    api.get('/banks').then((b) => {
+      setBanks(b);
+      setForm({ applied: balance.toFixed(2), date: today(), method: 'transfer', bank_account_id: b.find((x) => x.kind === 'bank')?.id || b[0]?.id, reference: '',
+        fee_type: pct ? feeDefaults.type || 'commission' : '', fee_pct: pct || '', fee: pct ? round2(balance * pct / 100).toFixed(2) : '' });
+    });
+  }, [open, balance, allowFee, feeDefaults?.pct, feeDefaults?.type]);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const applied = Number(form.applied || 0);
+  const fee = form.fee_type ? Number(form.fee || 0) : 0;
+  const received = round2(applied - fee);
+  // el % recalcula el monto del descuento; editar el monto deja el % vacío
+  const setPct = (v) => set({ fee_pct: v, fee: v === '' ? '' : round2(applied * Number(v) / 100).toFixed(2) });
+  const setApplied = (v) => set({ applied: v, ...(form.fee_pct !== '' && form.fee_type && { fee: round2(Number(v || 0) * Number(form.fee_pct) / 100).toFixed(2) }) });
+  const save = async () => {
+    try {
+      const { applied: _a, fee_pct: _p, ...rest } = form;
+      await onSave(allowFee ? { ...rest, amount: received, fee, fee_type: fee ? form.fee_type : null } : { ...rest, amount: applied });
+    } catch (e) { setError(e); }
+  };
   return (
     <Modal open={open} onClose={onClose} title={title}
       footer={<><button className="btn-ghost" onClick={onClose}>Cancelar</button><button className="btn-primary" onClick={save}>Guardar</button></>}>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Monto" className="col-span-2" hint={`Pendiente: ${money(balance)}`}><Input type="number" step="0.01" className="num text-right text-[16px]" value={form.amount || ''} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field>
-        <Field label="Fecha"><Input type="date" value={form.date || ''} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
-        <Field label="Método"><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>{PAY_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
-        <Field label="Cuenta" className="col-span-2"><Select value={form.bank_account_id || ''} onChange={(e) => setForm({ ...form, bank_account_id: e.target.value })}>{banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
-        <Field label="Referencia" className="col-span-2"><Input value={form.reference || ''} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="No. de transferencia, cheque…" /></Field>
+        <Field label={allowFee ? 'Monto que se salda de la factura' : 'Monto'} className="col-span-2" hint={`Pendiente: ${money(balance)}`}>
+          <Input type="number" step="0.01" className="num text-right text-[16px]" value={form.applied} onChange={(e) => setApplied(e.target.value)} />
+        </Field>
+        {allowFee && <>
+          <Field label="Descuento aplicado" className="col-span-2" hint="Si te pagan menos porque una plataforma cobra comisión o el cliente te retiene un impuesto">
+            <Tabs tabs={FEE_TYPES} value={form.fee_type || ''} onChange={(v) => set({ fee_type: v, ...(v && !form.fee && { fee_pct: '', fee: '' }) })} />
+          </Field>
+          {form.fee_type && <>
+            <Field label="Porcentaje"><div className="relative"><Input type="number" step="0.01" min="0" max="100" className="num text-right pr-8" value={form.fee_pct} onChange={(e) => setPct(e.target.value)} placeholder="15" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-faint">%</span></div></Field>
+            <Field label="Monto descontado"><Input type="number" step="0.01" min="0" className="num text-right" value={form.fee} onChange={(e) => set({ fee: e.target.value, fee_pct: '' })} /></Field>
+            <div className="col-span-2 rounded-lg bg-paper px-3.5 py-3 text-[13px] space-y-1">
+              <div className="flex justify-between"><span className="text-text-muted">Se salda de la factura</span><span className="num">{money(applied)}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">{form.fee_type === 'withholding' ? 'Retenido (impuesto adelantado)' : 'Comisión (gasto)'}</span><span className="num">−{money(fee)}</span></div>
+              <div className="flex justify-between font-semibold pt-1 border-t border-line"><span>Entra al banco</span><span className={cx('num', received < 0 && 'text-danger')}>{money(received)}</span></div>
+            </div>
+          </>}
+        </>}
+        <Field label="Fecha"><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} /></Field>
+        <Field label="Método"><Select value={form.method} onChange={(e) => set({ method: e.target.value })}>{PAY_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+        <Field label="Cuenta" className="col-span-2"><Select value={form.bank_account_id} onChange={(e) => set({ bank_account_id: e.target.value })}>{banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
+        <Field label="Referencia" className="col-span-2"><Input value={form.reference} onChange={(e) => set({ reference: e.target.value })} placeholder="No. de transferencia, cheque…" /></Field>
         <div className="col-span-2"><ErrorBox error={error} /></div>
       </div>
     </Modal>

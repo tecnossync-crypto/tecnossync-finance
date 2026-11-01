@@ -14,7 +14,10 @@ const MOVES = {
     SELECT i.date, 'credit_note', i.id, COALESCE(i.ncf, i.number), NULL, NULL, 0, (i.total - i.itbis_retained - i.isr_retained)
       FROM invoices i WHERE i.company_id=$1 AND i.contact_id=$2 AND i.doc_type='credit_note' AND i.status NOT IN ('draft','void')
     UNION ALL
-    SELECT p.date, 'payment', i.id, COALESCE(i.ncf, i.number), NULL, concat_ws(' · ', p.method, p.reference), 0, p.amount
+    SELECT p.date, 'payment', i.id, COALESCE(i.ncf, i.number), NULL,
+           concat_ws(' · ', p.method, p.reference, CASE WHEN p.fee > 0 THEN
+             (CASE p.fee_type WHEN 'withholding' THEN 'retención ' ELSE 'comisión ' END) || to_char(p.fee, 'FM999,999,990.00') END),
+           0, p.amount + p.fee
       FROM payments p JOIN invoices i ON i.id=p.invoice_id
      WHERE p.company_id=$1 AND p.direction='in' AND i.contact_id=$2`,
   supplier: `

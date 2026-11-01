@@ -27,7 +27,8 @@ function computeTotals(company, items, opts) {
 async function loadInvoice(client, cid, id) {
   const { rows: [inv] } = await client.query(
     `SELECT i.*, c.name AS contact_name, c.tax_id AS contact_tax_id, c.id_type AS contact_id_type, c.address AS contact_address,
-            c.email AS contact_email, c.phone AS contact_phone, r.number AS ref_number, r.ncf AS ref_ncf
+            c.email AS contact_email, c.phone AS contact_phone, c.payment_fee_pct AS contact_fee_pct, c.payment_fee_type AS contact_fee_type,
+            r.number AS ref_number, r.ncf AS ref_ncf
        FROM invoices i LEFT JOIN contacts c ON c.id=i.contact_id LEFT JOIN invoices r ON r.id=i.ref_invoice_id
       WHERE i.id=$1 AND i.company_id=$2`, [id, cid]
   );
@@ -219,18 +220,21 @@ router.post('/:id/convert', allow('operator'), async (req, res) => {
 
 router.post('/:id/payments', allow('operator'), async (req, res) => {
   const { amount, bank_account_id, date = today(), method = 'transfer', reference } = req.body;
+  const fee = round(req.body.fee || 0);
+  const feeType = fee > 0 ? (req.body.fee_type === 'withholding' ? 'withholding' : 'commission') : null;
   await tx(async (client) => {
     const inv = await loadInvoice(client, req.cid, req.params.id);
     if (!['issued', 'partial'].includes(inv.status) || inv.doc_type !== 'invoice') throw new AppError(400, 'La factura no admite cobros');
     const balance = round(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid);
-    const amt = round(amount);
-    if (amt <= 0 || amt > balance + 0.001) throw new AppError(400, `Monto inválido. Saldo pendiente: ${balance.toFixed(2)}`);
+    const amt = round(amount || 0);
+    const applied = round(amt + fee);
+    if (amt < 0 || fee < 0 || applied <= 0 || applied > balance + 0.001) throw new AppError(400, `Monto inválido. Saldo pendiente: ${balance.toFixed(2)}`);
     const { rows: [pay] } = await client.query(
-      `INSERT INTO payments (company_id, direction, invoice_id, bank_account_id, date, amount, method, reference)
-       VALUES ($1,'in',$2,$3,$4,$5,$6,$7) RETURNING *`, [req.cid, inv.id, bank_account_id, date, amt, method, reference || null]
+      `INSERT INTO payments (company_id, direction, invoice_id, bank_account_id, date, amount, method, reference, fee, fee_type)
+       VALUES ($1,'in',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [req.cid, inv.id, bank_account_id, date, amt, method, reference || null, fee, feeType]
     );
     await postPayment(client, req.company, pay, `factura ${inv.ncf || inv.number}`, req.user.id);
-    const paid = round(Number(inv.paid) + amt);
+    const paid = round(Number(inv.paid) + applied);
     await client.query(`UPDATE invoices SET paid=$3, status=$4 WHERE id=$1 AND company_id=$2`,
       [inv.id, req.cid, paid, paid >= balance + Number(inv.paid) - 0.001 ? 'paid' : 'partial']);
   });
@@ -245,7 +249,7 @@ router.delete('/:id/payments/:pid', allow('accountant'), async (req, res) => {
     await client.query('DELETE FROM payments WHERE id=$1', [p.id]);
     await client.query(
       `UPDATE invoices SET paid = paid - $3, status = CASE WHEN paid - $3 <= 0 THEN 'issued' ELSE 'partial' END WHERE id=$1 AND company_id=$2`,
-      [req.params.id, req.cid, p.amount]
+      [req.params.id, req.cid, round(Number(p.amount) + Number(p.fee))]
     );
   });
   res.json(await loadInvoice({ query }, req.cid, req.params.id));
