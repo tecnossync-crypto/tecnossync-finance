@@ -116,7 +116,7 @@ function docTitle(inv, company, quote) {
 }
 
 function LetterSheet({ inv, company, logo, quote }) {
-  const accent = company.accent_color || '#0F7B5F';
+  const accent = company.accent_color || '#8B2FC9';
   const showItbis = company.charges_itbis;
   return (
     <article className="print-sheet card bg-white p-6 sm:p-10 max-w-[860px] w-full mx-auto text-[13px] text-[#111]">

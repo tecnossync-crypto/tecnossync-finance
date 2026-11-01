@@ -1,4 +1,4 @@
--- Cuadre — esquema base (multiempresa: toda tabla de negocio lleva company_id)
+-- Tecnossync Ledger — esquema base (multiempresa: toda tabla de negocio lleva company_id)
 
 CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS companies (
   next_quote_no     INTEGER NOT NULL DEFAULT 1,
   next_entry_no     INTEGER NOT NULL DEFAULT 1,
   invoice_footer    TEXT,
-  accent_color      TEXT NOT NULL DEFAULT '#0F7B5F',
+  accent_color      TEXT NOT NULL DEFAULT '#8B2FC9',
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

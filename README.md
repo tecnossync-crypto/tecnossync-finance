@@ -1,4 +1,4 @@
-# Cuadre
+# Tecnossync Ledger
 
 Finanzas y contabilidad multiempresa para negocios dominicanos, **formales** (RNC, NCF/e-CF, ITBIS, DGII) e **informales** (numeración interna, sin NCF).
 

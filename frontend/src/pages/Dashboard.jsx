@@ -101,14 +101,14 @@ export default function Dashboard() {
             <ResponsiveContainer>
               <AreaChart data={months} margin={{ top: 10, right: 6, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="gi" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0F7B5F" stopOpacity={0.22} /><stop offset="100%" stopColor="#0F7B5F" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="gi" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8B2FC9" stopOpacity={0.22} /><stop offset="100%" stopColor="#8B2FC9" stopOpacity={0} /></linearGradient>
                   <linearGradient id="ge" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#E07A5F" stopOpacity={0.15} /><stop offset="100%" stopColor="#E07A5F" stopOpacity={0} /></linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="#E2E5DD" strokeDasharray="3 4" />
-                <XAxis dataKey="month" tickFormatter={monthLabel} interval="preserveStartEnd" minTickGap={18} tick={{ fontSize: 11, fill: '#8A958D', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={compact} tick={{ fontSize: 11, fill: '#8A958D', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} width={44} />
-                <Tooltip content={<ChartTip />} cursor={{ stroke: '#CDD2C7' }} />
-                <Area type="monotone" dataKey="income" stroke="#0F7B5F" strokeWidth={2.2} fill="url(#gi)" />
+                <CartesianGrid vertical={false} stroke="#E6E2EE" strokeDasharray="3 4" />
+                <XAxis dataKey="month" tickFormatter={monthLabel} interval="preserveStartEnd" minTickGap={18} tick={{ fontSize: 11, fill: '#948DA6', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={compact} tick={{ fontSize: 11, fill: '#948DA6', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} width={44} />
+                <Tooltip content={<ChartTip />} cursor={{ stroke: '#D3CDE0' }} />
+                <Area type="monotone" dataKey="income" stroke="#8B2FC9" strokeWidth={2.2} fill="url(#gi)" />
                 <Area type="monotone" dataKey="expense" stroke="#E07A5F" strokeWidth={2} fill="url(#ge)" />
               </AreaChart>
             </ResponsiveContainer>

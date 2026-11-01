@@ -39,5 +39,5 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4100;
 migrate()
-  .then(() => app.listen(PORT, () => console.log(`Cuadre API en :${PORT}`)))
+  .then(() => app.listen(PORT, () => console.log(`Tecnossync Ledger API en :${PORT}`)))
   .catch((e) => { console.error('No se pudo migrar la base de datos', e); process.exit(1); });

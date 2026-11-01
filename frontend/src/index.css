@@ -6,7 +6,7 @@
   html { -webkit-font-smoothing: antialiased; }
   body { @apply bg-paper text-text font-sans text-[14px] leading-relaxed; }
   h1, h2, h3 { @apply font-display tracking-tight; }
-  ::selection { background: #C6F16A; color: #0B1512; }
+  ::selection { background: #E0359A; color: #FFFFFF; }
   input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
@@ -44,7 +44,7 @@
   .ledger tfoot td { @apply px-4 py-3 border-t-2 border-text font-semibold; }
 
   .tick { @apply relative; }
-  .tick::before { content: ''; @apply absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r bg-lime; }
+  .tick::before { content: ''; @apply absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r; background: linear-gradient(180deg, #F472B6, #A855F7); }
 }
 
 /* Impresión: solo el documento */

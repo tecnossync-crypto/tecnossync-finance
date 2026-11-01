@@ -188,7 +188,7 @@ function UsersSettings() {
           <button className="btn-primary" onClick={() => api.post('/company/users', form).then(() => { setForm(null); toast('Usuario agregado'); reload(); }).catch(setError)}>Agregar</button></>}>
         {form && (
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Correo" className="col-span-2" hint="Si ya tiene cuenta en Cuadre, solo se le da acceso."><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Correo" className="col-span-2" hint="Si ya tiene cuenta en Tecnossync Ledger, solo se le da acceso."><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Nombre"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Contraseña temporal"><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
             <Field label="Rol" className="col-span-2"><Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{['admin', 'accountant', 'operator', 'viewer'].map((r) => <option key={r} value={r}>{ROLES[r]}</option>)}</Select></Field>

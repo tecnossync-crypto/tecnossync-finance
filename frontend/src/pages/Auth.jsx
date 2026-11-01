@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth';
 import { Logo } from '../components/Logo';
 import { Field, Input, ErrorBox, cx } from '../components/ui';
 
-// Panel de marca: una cuenta T que "cuadra"
+// Panel de marca: un asiento que cuadra, con la identidad de Tecnossync
 function BrandPanel() {
   const rows = [['Ventas de servicios', '', '84,500.00'], ['Cuentas por cobrar', '99,710.00', ''], ['ITBIS por pagar', '', '15,210.00']];
   return (
@@ -15,7 +15,7 @@ function BrandPanel() {
       <Logo className="relative" />
       <div className="relative">
         <h1 className="font-display text-[64px] leading-[0.95] font-semibold tracking-tight">
-          Que todo<br /><span className="text-lime">cuadre.</span>
+          Tus finanzas,<br /><span className="bg-grad2 bg-clip-text text-transparent">en sincronía.</span>
         </h1>
         <p className="mt-6 text-white/60 text-[16px] max-w-md">
           Facturación, gastos, presupuestos y contabilidad completa para negocios dominicanos — formales o informales.
@@ -32,7 +32,7 @@ function BrandPanel() {
             </div>
           ))}
           <div className="grid grid-cols-[1fr_96px_96px] gap-2 pt-3 text-[13px] font-semibold">
-            <span className="flex items-center gap-2"><span className="h-5 px-1.5 rounded bg-lime text-ink text-[11px] font-bold grid place-items-center">=</span> Cuadrado</span>
+            <span className="flex items-center gap-2"><span className="h-5 px-1.5 rounded bg-grad text-white text-[11px] font-bold grid place-items-center">=</span> Cuadrado</span>
             <span className="num text-right text-lime">99,710.00</span>
             <span className="num text-right text-lime">99,710.00</span>
           </div>
@@ -105,7 +105,7 @@ export function Register() {
   return (
     <Shell>
       <div className="eyebrow mb-3">Crear cuenta</div>
-      <h2 className="text-[34px] font-semibold leading-tight">Empieza a cuadrar</h2>
+      <h2 className="text-[34px] font-semibold leading-tight">Crea tu empresa</h2>
       <form onSubmit={submit} className="mt-7 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Kind formal={false} icon={Store} title="Informal" text="Sin RNC. Facturas con numeración propia." />
