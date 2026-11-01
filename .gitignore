@@ -1,0 +1,6 @@
+.pgdata
+node_modules
+uploads
+.env
+dist
+*.log

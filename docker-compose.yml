@@ -1,0 +1,18 @@
+# Desarrollo local: solo la base de datos. Backend y frontend corren con npm.
+#   docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cuadre_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cuadre
+      POSTGRES_USER: cuadre
+      POSTGRES_PASSWORD: cuadre
+    ports:
+      - "5434:5432"
+    volumes:
+      - cuadre_db:/var/lib/postgresql/data
+
+volumes:
+  cuadre_db:

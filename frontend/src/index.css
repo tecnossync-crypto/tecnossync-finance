@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-paper text-text font-sans text-[14px] leading-relaxed; }
+  h1, h2, h3 { @apply font-display tracking-tight; }
+  ::selection { background: #C6F16A; color: #0B1512; }
+  input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; }
+}
+
+@layer components {
+  .num { @apply font-mono tabular-nums tracking-tight; }
+  .eyebrow { @apply font-mono text-[10.5px] uppercase tracking-[0.14em] text-text-faint; }
+
+  .input {
+    @apply w-full h-10 rounded-lg border border-line bg-surface px-3 text-[14px] text-text placeholder:text-text-faint
+           outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10 disabled:bg-paper disabled:text-text-muted;
+  }
+  textarea.input { @apply h-auto py-2; }
+  select.input { @apply pr-8 appearance-none bg-no-repeat; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235B675F' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 10px center; }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-[13.5px] font-semibold transition
+           disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap select-none;
+  }
+  .btn-primary { @apply btn bg-ink text-white hover:bg-ink-3 active:translate-y-px; }
+  .btn-brand { @apply btn bg-brand text-white hover:bg-brand-600 active:translate-y-px; }
+  .btn-ghost { @apply btn text-text-muted hover:bg-black/[0.04] hover:text-text; }
+  .btn-outline { @apply btn border border-line bg-surface text-text hover:border-line-strong hover:bg-paper; }
+  .btn-danger { @apply btn text-danger hover:bg-danger-50; }
+  .btn-sm { @apply h-8 px-3 text-[12.5px] rounded-md; }
+
+  .card { @apply bg-surface border border-line rounded-2xl shadow-card; }
+
+  /* Tablas tipo libro contable: reglas finas, cifras alineadas */
+  .ledger { @apply w-full text-[13.5px]; }
+  .ledger thead th { @apply eyebrow font-medium text-left px-4 py-2.5 border-b border-line bg-paper/60 first:rounded-tl-2xl last:rounded-tr-2xl; }
+  .ledger tbody td { @apply px-4 py-3 border-b border-line/70; }
+  .ledger tbody tr:last-child td { @apply border-b-0; }
+  .ledger tbody tr.row-link { @apply cursor-pointer transition-colors hover:bg-brand-50/50; }
+  .ledger .r { @apply text-right; }
+  .ledger tfoot td { @apply px-4 py-3 border-t-2 border-text font-semibold; }
+
+  .tick { @apply relative; }
+  .tick::before { content: ''; @apply absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r bg-lime; }
+}
+
+/* Impresión: solo el documento */
+@media print {
+  @page { size: letter; margin: 12mm; }
+  body { background: white !important; }
+  .no-print { display: none !important; }
+  .print-sheet { box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .print-ticket { width: 72mm !important; }
+}

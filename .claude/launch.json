@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "cuadre-api", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "backend", "run", "dev"], "port": 4100 },
+    { "name": "cuadre-web", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "frontend", "run", "dev"], "port": 5180 }
+  ]
+}
