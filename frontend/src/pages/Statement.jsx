@@ -29,6 +29,13 @@ export default function Statement() {
     return () => url && URL.revokeObjectURL(url);
   }, [company.has_logo]);
 
+  useEffect(() => {
+    if (!data) return;
+    const prev = document.title;
+    document.title = `Estado de cuenta ${data.contact.name} ${data.to}`;
+    return () => { document.title = prev; };
+  }, [data]);
+
   if (error) return <div className="max-w-md"><ErrorBox error={error} /></div>;
   if (loading || !data) return <Loading />;
   const c = data.contact;

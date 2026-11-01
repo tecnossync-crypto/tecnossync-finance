@@ -48,10 +48,18 @@
 }
 
 /* Impresión: solo el documento */
+/* Margen de página 0: el navegador no imprime URL ni fecha; el margen lo pone cada hoja. */
 @media print {
-  @page { size: letter; margin: 12mm; }
-  body { background: white !important; }
+  @page { size: letter; margin: 0; }
+  html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
-  .print-sheet { box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
-  .print-ticket { width: 72mm !important; }
+  main, main > * { padding: 0 !important; margin: 0 !important; max-width: none !important; display: block !important; }
+  .min-h-screen { padding-left: 0 !important; min-height: 0 !important; }
+  .print-sheet { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; padding: 12mm 14mm !important; }
+  /* La factura ocupa la hoja completa para que el pie quede abajo (si es más larga, sigue en otra hoja) */
+  .invoice-sheet { padding: 0 !important; min-height: 278mm !important; }
+  .invoice-sheet > div:last-child { padding: 11mm 14mm 9mm !important; }
+  .print-ticket { width: 72mm !important; padding: 0 !important; }
+  thead { display: table-header-group; }
+  tr, .break-inside-avoid { break-inside: avoid; }
 }
