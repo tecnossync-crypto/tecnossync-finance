@@ -159,7 +159,7 @@ function Aging({ kind }) {
                 <td className="font-semibold">{r.contact || '—'}</td><td className="num text-[12.5px]">{r.ncf || r.doc}</td>
                 <td className="num text-[12.5px] text-text-muted">{date(r.date)}</td><td className="num text-[12.5px] text-text-muted">{date(r.due_date)}</td>
                 <td className={cx('r num', r.days_overdue > 0 && 'text-danger font-semibold')}>{r.days_overdue || '—'}</td>
-                <td className="r"><Money value={r.balance} className="font-semibold" /></td>
+                <td className="r"><Money value={r.balance} className="font-semibold" />{r.currency === 'USD' && <div className="num text-[11px] text-text-faint">{money(r.balance_fx, 'USD')}</div>}</td>
               </tr>
             ))}
           </tbody>

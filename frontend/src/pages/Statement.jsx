@@ -19,7 +19,8 @@ export default function Statement() {
   const from = params.get('desde') || `${today().slice(0, 4)}-01-01`;
   const to = params.get('hasta') || today();
   const side = params.get('lado') || '';
-  const { data, loading, error } = useData(() => api.get(`/contacts/${id}/statement?from=${from}&to=${to}${side ? `&side=${side}` : ''}`), [id, from, to, side]);
+  const currency = params.get('moneda') || '';
+  const { data, loading, error } = useData(() => api.get(`/contacts/${id}/statement?from=${from}&to=${to}${side ? `&side=${side}` : ''}${currency ? `&currency=${currency}` : ''}`), [id, from, to, side, currency]);
   const setParam = (k, v) => { const p = new URLSearchParams(params); p.set(k, v); setParams(p, { replace: true }); };
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function Statement() {
   if (loading || !data) return <Loading />;
   const c = data.contact;
   const supplier = data.side === 'supplier';
+  const cur = data.currency || 'DOP';
   const accent = company.accent_color || '#8B2FC9';
   const docLink = (l) => (l.kind === 'expense' || (supplier && l.kind === 'payment') ? `/gastos?ver=${l.doc_id}` : `/facturas/${l.doc_id}`);
 
@@ -48,6 +50,7 @@ export default function Statement() {
       <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="btn-ghost btn-sm -ml-3"><ArrowLeft size={15} /> Volver</button>
         <div className="flex flex-wrap items-center gap-2">
+          {data.currencies?.length > 1 && <Tabs tabs={data.currencies.map((x) => [x, x === 'USD' ? 'US$' : 'RD$'])} value={cur} onChange={(v) => setParam('moneda', v)} />}
           {c.kind === 'both' && <Tabs tabs={[['customer', 'Por cobrar'], ['supplier', 'Por pagar']]} value={data.side} onChange={(v) => setParam('lado', v)} />}
           <Input type="date" className="w-[150px]" value={from} onChange={(e) => setParam('desde', e.target.value)} />
           <span className="text-text-faint">→</span>
@@ -71,7 +74,7 @@ export default function Statement() {
           </div>
           <div className="sm:text-right">
             <div className="font-display text-[19px] font-semibold uppercase tracking-wide" style={{ color: accent }}>Estado de cuenta</div>
-            <div className="text-[12px] text-[#555] mt-1">{supplier ? 'Cuentas por pagar' : 'Cuentas por cobrar'}</div>
+            <div className="text-[12px] text-[#555] mt-1">{supplier ? 'Cuentas por pagar' : 'Cuentas por cobrar'}{cur === 'USD' ? ' · en dólares (US$)' : ''}</div>
             <div className="num text-[12.5px] mt-2">{dateShort(data.from)} — {dateShort(data.to)}</div>
           </div>
         </header>
@@ -87,12 +90,12 @@ export default function Statement() {
             </div>
           </div>
           <div className="rounded-lg p-4 text-[12.5px] space-y-1.5" style={{ background: '#F6F4FA' }}>
-            <Row label="Balance anterior" value={data.opening} />
-            <Row label={supplier ? 'Compras del período' : 'Facturado en el período'} value={data.charges} />
-            <Row label={supplier ? 'Pagos del período' : 'Pagos y créditos'} value={-data.credits} />
+            <Row label="Balance anterior" value={data.opening} c={cur} />
+            <Row label={supplier ? 'Compras del período' : 'Facturado en el período'} value={data.charges} c={cur} />
+            <Row label={supplier ? 'Pagos del período' : 'Pagos y créditos'} value={-data.credits} c={cur} />
             <div className="flex justify-between items-baseline pt-2 mt-1" style={{ borderTop: '1.5px solid #111' }}>
               <span className="font-semibold">{supplier ? 'Saldo a pagar' : 'Saldo pendiente'}</span>
-              <span className="num text-[18px] font-semibold">{money(data.closing)}</span>
+              <span className="num text-[18px] font-semibold">{money(data.closing, cur)}</span>
             </div>
           </div>
         </section>
@@ -107,7 +110,7 @@ export default function Statement() {
           <tbody>
             <tr className="border-b border-[#e6e6e6] text-[#555]">
               <td className="py-2 pr-2 num">{dateShort(data.from)}</td><td className="py-2 px-2" colSpan={4}>Balance anterior</td>
-              <td className="py-2 pl-2 text-right num">{money(data.opening, 'DOP', { symbol: false })}</td>
+              <td className="py-2 pl-2 text-right num">{money(data.opening, cur, { symbol: false })}</td>
             </tr>
             {data.lines.map((l, i) => (
               <tr key={i} className="border-b border-[#e6e6e6] align-top">
@@ -117,9 +120,9 @@ export default function Statement() {
                   {l.ref && <Link to={docLink(l)} className="num text-[11.5px] text-[#666] hover:underline">{l.ref}</Link>}
                 </td>
                 <td className="py-2 px-2 text-[#555]">{l.detail ? PAY_LABEL(l.detail) : l.due_date ? `Vence ${dateShort(l.due_date)}` : ''}</td>
-                <td className="py-2 px-2 text-right num">{l.charge ? money(l.charge, 'DOP', { symbol: false }) : ''}</td>
-                <td className="py-2 px-2 text-right num">{l.credit ? money(l.credit, 'DOP', { symbol: false }) : ''}</td>
-                <td className="py-2 pl-2 text-right num font-semibold">{money(l.balance, 'DOP', { symbol: false })}</td>
+                <td className="py-2 px-2 text-right num">{l.charge ? money(l.charge, cur, { symbol: false }) : ''}</td>
+                <td className="py-2 px-2 text-right num">{l.credit ? money(l.credit, cur, { symbol: false }) : ''}</td>
+                <td className="py-2 pl-2 text-right num font-semibold">{money(l.balance, cur, { symbol: false })}</td>
               </tr>
             ))}
             {data.lines.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-[#777]">Sin movimientos en el período.</td></tr>}
@@ -141,7 +144,7 @@ export default function Statement() {
                     <td className="py-1.5 px-2 num">{dateShort(o.date)}</td>
                     <td className="py-1.5 px-2 num">{dateShort(o.due_date)}</td>
                     <td className={cx('py-1.5 px-2 text-right num', o.days_overdue > 0 && 'text-[#C8423B] font-semibold')}>{o.days_overdue || '—'}</td>
-                    <td className="py-1.5 pl-2 text-right num font-semibold">{money(o.balance, 'DOP', { symbol: false })}</td>
+                    <td className="py-1.5 pl-2 text-right num font-semibold">{money(o.balance, cur, { symbol: false })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -150,7 +153,7 @@ export default function Statement() {
               {AGING.map(([k, l]) => (
                 <div key={k} className="py-2.5 px-1 border-r last:border-r-0 border-[#ddd]">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-[#777]">{l}</div>
-                  <div className={cx('num text-[13px] font-semibold mt-0.5', k !== 'current' && data.aging[k] > 0 && 'text-[#C8423B]')}>{money(data.aging[k], 'DOP', { symbol: false })}</div>
+                  <div className={cx('num text-[13px] font-semibold mt-0.5', k !== 'current' && data.aging[k] > 0 && 'text-[#C8423B]')}>{money(data.aging[k], cur, { symbol: false })}</div>
                 </div>
               ))}
             </div>
@@ -174,6 +177,6 @@ export default function Statement() {
 const PAY = { cash: 'Efectivo', transfer: 'Transferencia', check: 'Cheque', card: 'Tarjeta', credit: 'Crédito', other: 'Otro' };
 const PAY_LABEL = (d) => d.split(' · ').map((x, i) => (i === 0 && PAY[x]) || x).join(' · ');
 
-const Row = ({ label, value }) => (
-  <div className="flex justify-between"><span className="text-[#555]">{label}</span><span className="num">{money(value)}</span></div>
+const Row = ({ label, value, c }) => (
+  <div className="flex justify-between"><span className="text-[#555]">{label}</span><span className="num">{money(value, c)}</span></div>
 );

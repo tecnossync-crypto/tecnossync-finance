@@ -31,10 +31,13 @@ function predict(m, x) {
 }
 
 // Ocurrencias de cada cobro recurrente activo por mes, netas de ITBIS (lo que entra como ingreso)
-function recurringByMonth(templates, fromYm, toYm) {
+const templateAmount = (r, usdRate) => r.items.reduce((s, i) => s + Number(i.qty) * Number(i.price) - Number(i.discount || 0), 0)
+  * (r.currency === 'USD' ? Number(usdRate || 0) : 1);
+
+function recurringByMonth(templates, fromYm, toYm, usdRate) {
   const out = {};
   for (const r of templates) {
-    const amount = r.items.reduce((s, i) => s + Number(i.qty) * Number(i.price) - Number(i.discount || 0), 0);
+    const amount = templateAmount(r, usdRate);
     let d = r.next_date;
     for (let guard = 0; guard < 60 && ym(d) <= toYm; guard++) {
       if (r.end_date && d > r.end_date) break;
@@ -58,7 +61,7 @@ async function forecast(cid, horizon = 6) {
       WHERE jl.company_id=$1 AND je.status='posted' AND je.date >= $2::date
       GROUP BY 1`, [cid, `${histFrom}-01`]);
   const { rows: recHist } = await query(
-    `SELECT to_char(date,'YYYY-MM') AS m, SUM(subtotal - discount) AS amount
+    `SELECT to_char(date,'YYYY-MM') AS m, SUM((subtotal - discount) * exchange_rate) AS amount
        FROM invoices WHERE company_id=$1 AND recurring_id IS NOT NULL AND doc_type='invoice' AND status NOT IN ('draft','void') AND date >= $2::date
       GROUP BY 1`, [cid, `${histFrom}-01`]);
   const byM = Object.fromEntries(hist.map((h) => [h.m, h]));
@@ -80,7 +83,8 @@ async function forecast(cid, horizon = 6) {
 
   const { rows: templates } = await query(`SELECT * FROM recurring_invoices WHERE company_id=$1 AND active`, [cid]);
   const lastYm = shiftYm(cur, horizon);
-  const committed = recurringByMonth(templates, cur, lastYm);
+  const { rows: [{ usd_rate: usdRate }] } = await query('SELECT usd_rate FROM companies WHERE id=$1', [cid]);
+  const committed = recurringByMonth(templates, cur, lastYm, usdRate);
 
   const { rows: [{ cash }] } = await query(
     `SELECT COALESCE(SUM(jl.debit - jl.credit),0) AS cash
@@ -90,8 +94,7 @@ async function forecast(cid, horizon = 6) {
 
   // Mes en curso: lo real hasta hoy + lo recurrente que falta por facturar este mes
   const curReal = { income: round(Number(byM[cur]?.income || 0)), expense: round(Number(byM[cur]?.expense || 0)) };
-  const curPendingRec = round(templates.reduce((s, r) => s + (r.next_date.startsWith(cur) && r.next_date > today
-    ? r.items.reduce((a, i) => a + Number(i.qty) * Number(i.price) - Number(i.discount || 0), 0) : 0), 0));
+  const curPendingRec = round(templates.reduce((s, r) => s + (r.next_date.startsWith(cur) && r.next_date > today ? templateAmount(r, usdRate) : 0), 0));
 
   let runningCash = Number(cash);
   const projection = [];
@@ -117,10 +120,10 @@ async function forecast(cid, horizon = 6) {
   const best = history.reduce((b, h) => (!b || h.income > b.income ? h : b), null);
   const worst = history.reduce((b, h) => (!b || h.income < b.income ? h : b), null);
   const last3 = history.slice(-3);
-  const mrr = templates.reduce((s, r) => s + r.items.reduce((a, i) => a + Number(i.qty) * Number(i.price) - Number(i.discount || 0), 0) / r.every_months, 0);
+  const mrr = templates.reduce((s, r) => s + templateAmount(r, usdRate) / r.every_months, 0);
 
   const { rows: top } = await query(
-    `SELECT c.name, SUM(i.subtotal - i.discount) AS amount
+    `SELECT c.name, SUM((i.subtotal - i.discount) * i.exchange_rate) AS amount
        FROM invoices i JOIN contacts c ON c.id=i.contact_id
       WHERE i.company_id=$1 AND i.doc_type='invoice' AND i.status NOT IN ('draft','void') AND i.date >= $2::date
       GROUP BY c.name ORDER BY amount DESC`, [cid, `${shiftYm(cur, -12)}-01`]);

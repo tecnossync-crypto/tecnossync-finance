@@ -46,8 +46,8 @@ async function postEntry(client, companyId, { date, description, source_type = '
   );
   for (const l of clean) {
     await client.query(
-      'INSERT INTO journal_lines (company_id, entry_id, account_id, debit, credit, memo) VALUES ($1,$2,$3,$4,$5,$6)',
-      [companyId, entry.id, l.account_id, l.debit, l.credit, l.memo || null]
+      'INSERT INTO journal_lines (company_id, entry_id, account_id, debit, credit, memo, fx_amount, fx_currency) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [companyId, entry.id, l.account_id, l.debit, l.credit, l.memo || null, l.fx_amount == null ? null : round(l.fx_amount), l.fx_currency || null]
     );
   }
   return entry;
@@ -56,12 +56,13 @@ async function postEntry(client, companyId, { date, description, source_type = '
 /** Anula un asiento: el original y su reverso quedan en estado 'void' (visibles para auditoría, fuera de saldos). */
 async function voidEntry(client, companyId, e, date, userId) {
   const { rows: lines } = await client.query(
-    'SELECT account_id, debit, credit, memo FROM journal_lines WHERE entry_id=$1 AND company_id=$2', [e.id, companyId]
+    'SELECT account_id, debit, credit, memo, fx_amount, fx_currency FROM journal_lines WHERE entry_id=$1 AND company_id=$2', [e.id, companyId]
   );
   await postEntry(client, companyId, {
     date, userId, source_type: 'void', source_id: e.id,
     description: `Reverso asiento #${e.number}: ${e.description}`, status: 'void',
-    lines: lines.map((l) => ({ account_id: l.account_id, debit: l.credit, credit: l.debit, memo: l.memo })),
+    lines: lines.map((l) => ({ account_id: l.account_id, debit: l.credit, credit: l.debit, memo: l.memo,
+      fx_amount: l.fx_amount == null ? null : -l.fx_amount, fx_currency: l.fx_currency })),
   });
   await client.query(`UPDATE journal_entries SET status='void' WHERE id=$1 AND company_id=$2`, [e.id, companyId]);
 }
@@ -97,6 +98,15 @@ async function postInvoice(client, company, inv, items, userId) {
   for (const [account_id, amount] of byAccount) lines.push({ account_id, credit: amount });
   if (inv.itbis) lines.push({ account_id: await k('itbis_payable'), credit: inv.itbis });
 
+  // En US$ cada línea pasa a pesos con la tasa de la factura; el redondeo se absorbe en la cuenta por cobrar
+  const rate = Number(inv.exchange_rate || 1);
+  if (rate !== 1) {
+    for (const l of lines) { if (l.debit) l.debit = round(l.debit * rate); if (l.credit) l.credit = round(l.credit * rate); }
+    const diff = round(lines.reduce((s, l) => s + (l.credit || 0) - (l.debit || 0), 0));
+    lines[0].debit = round(lines[0].debit + diff);
+    lines[0].memo = `Factura ${inv.number} · US$ ${receivable.toFixed(2)} × ${rate}`;
+  }
+
   const sign = inv.doc_type === 'credit_note' ? -1 : 1;
   const final = sign === 1 ? lines : lines.map((l) => ({ ...l, debit: l.credit, credit: l.debit }));
   return postEntry(client, cid, {
@@ -130,7 +140,7 @@ async function postExpense(client, company, exp, userId) {
 async function postPayment(client, company, pay, label, userId) {
   const cid = company.id;
   const { rows: [bank] } = await client.query(
-    'SELECT account_id FROM bank_accounts WHERE id=$1 AND company_id=$2', [pay.bank_account_id, cid]
+    'SELECT account_id, currency FROM bank_accounts WHERE id=$1 AND company_id=$2', [pay.bank_account_id, cid]
   );
   if (!bank) throw new AppError(400, 'Cuenta de banco/caja inválida');
   const counter = await accountByKey(client, cid, pay.direction === 'in' ? 'ar' : 'ap');
@@ -139,9 +149,18 @@ async function postPayment(client, company, pay, label, userId) {
   if (pay.direction === 'in') {
     // Cobro con descuento: al banco entra lo recibido, el descuento va a gasto (comisión) o a
     // impuesto adelantado (retención), y la cuenta por cobrar baja por el total.
+    // En US$: banco y descuento a la tasa del cobro; la CxC baja lo que se registró a la tasa de la
+    // factura (ar_amount); la diferencia es ganancia o pérdida cambiaria.
+    const rate = Number(pay.exchange_rate || 1);
     const feeAcc = fee > 0 && await accountByKey(client, cid, pay.fee_type === 'withholding' ? 'isr_withheld_by_customers' : 'bank_fees');
-    lines = [{ account_id: bank.account_id, debit: pay.amount }, fee > 0 && { account_id: feeAcc, debit: fee },
-      { account_id: counter, credit: round(Number(pay.amount) + fee) }].filter((l) => l && (l.debit || l.credit));
+    const bankDop = round(pay.amount * rate), feeDop = round(fee * rate);
+    const ar = pay.ar_amount != null ? round(pay.ar_amount) : round(bankDop + feeDop);
+    const diff = round(ar - bankDop - feeDop);
+    const fx = bank.currency !== 'DOP' ? { fx_amount: pay.amount, fx_currency: bank.currency } : {};
+    lines = [{ account_id: bank.account_id, debit: bankDop, ...fx }, fee > 0 && { account_id: feeAcc, debit: feeDop },
+      diff > 0 && { account_id: await accountByKey(client, cid, 'fx_loss'), debit: diff },
+      diff < 0 && { account_id: await accountByKey(client, cid, 'fx_gain'), credit: -diff },
+      { account_id: counter, credit: ar }].filter((l) => l && (l.debit || l.credit));
   } else {
     lines = [{ account_id: counter, debit: pay.amount }, { account_id: bank.account_id, credit: pay.amount }];
   }

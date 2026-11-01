@@ -100,7 +100,7 @@ router.get('/', async (req, res) => {
   if (contact_id) { vals.push(contact_id); where += ` AND i.contact_id = $${vals.length}`; }
   if (q) { vals.push(`%${q}%`); where += ` AND (i.number ILIKE $${vals.length} OR i.ncf ILIKE $${vals.length} OR c.name ILIKE $${vals.length})`; }
   const { rows } = await query(
-    `SELECT i.id, i.number, i.ncf, i.ncf_type, i.date, i.due_date, i.total, i.paid, i.status, i.itbis, i.doc_type,
+    `SELECT i.id, i.number, i.ncf, i.ncf_type, i.date, i.due_date, i.total, i.paid, i.status, i.itbis, i.doc_type, i.currency, i.exchange_rate,
             i.itbis_retained, i.isr_retained, c.name AS contact_name, c.payment_fee_pct AS fee_pct, c.payment_fee_type AS fee_type,
             COALESCE(p.fees, 0) AS fees, COALESCE(p.received, 0) AS received
        FROM invoices i
@@ -114,8 +114,24 @@ router.get('/:id', async (req, res) => {
 });
 
 // Crea el documento (borrador). ctx = { cid, company, user } — el req, o el de un cobro recurrente.
+// Moneda y tasa: DOP siempre 1; US$ exige la tasa del día (pesos por dólar) y se recuerda para la próxima.
+async function currencyOf(client, ctx, b) {
+  if (b.ref_invoice_id) { // la nota de crédito va en la moneda y tasa de la factura que afecta
+    const { rows: [r] } = await client.query('SELECT currency, exchange_rate FROM invoices WHERE id=$1 AND company_id=$2', [b.ref_invoice_id, ctx.cid]);
+    if (r) return { currency: r.currency, exchange_rate: Number(r.exchange_rate) };
+  }
+  const currency = b.currency === 'USD' ? 'USD' : 'DOP';
+  if (currency === 'DOP') return { currency, exchange_rate: 1 };
+  const rate = round4(b.exchange_rate || ctx.company.usd_rate);
+  if (!(rate > 0)) throw new AppError(400, 'Indica la tasa del dólar (pesos por US$)');
+  await client.query('UPDATE companies SET usd_rate=$2 WHERE id=$1', [ctx.cid, rate]);
+  return { currency, exchange_rate: rate };
+}
+const round4 = (n) => Math.round(Number(n || 0) * 10000) / 10000;
+
 async function createInvoice(client, ctx, b, extra = {}) {
   const docType = ['quote', 'credit_note'].includes(b.doc_type) ? b.doc_type : 'invoice';
+  const cur = await currencyOf(client, ctx, b);
   const t = computeTotals(ctx.company, b.items, b);
   if (b.contact_id) {
     const { rows } = await client.query('SELECT 1 FROM contacts WHERE id=$1 AND company_id=$2', [b.contact_id, ctx.cid]);
@@ -127,12 +143,12 @@ async function createInvoice(client, ctx, b, extra = {}) {
   const number = await nextNumber(client, ctx.cid, docType === 'quote' ? 'quote' : 'invoice');
   const { rows: [inv] } = await client.query(
     `INSERT INTO invoices (company_id, doc_type, number, ncf_type, contact_id, date, due_date, currency, income_type, payment_terms,
-        subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, created_by, ref_invoice_id, recurring_id, period)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+        subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, created_by, ref_invoice_id, recurring_id, period, exchange_rate)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
     [ctx.cid, docType, number, ctx.company.is_formal ? (b.ncf_type || null) : null, b.contact_id || null, b.date || today(),
-      b.due_date || null, b.currency || ctx.company.currency, b.income_type || '01', b.payment_terms || null,
+      b.due_date || null, cur.currency, b.income_type || '01', b.payment_terms || null,
       t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null, ctx.user.id, b.ref_invoice_id || null,
-      extra.recurring_id || null, extra.period || null]
+      extra.recurring_id || null, extra.period || null, cur.exchange_rate]
   );
   for (const l of t.lines) {
     await client.query(
@@ -160,11 +176,13 @@ router.put('/:id', allow('operator'), async (req, res) => {
     const cur = await loadInvoice(client, req.cid, req.params.id);
     if (cur.status !== 'draft') throw new AppError(400, 'Solo se pueden editar borradores');
     const t = computeTotals(req.company, b.items, b);
+    const money = await currencyOf(client, req, { ...b, ref_invoice_id: cur.ref_invoice_id });
     await client.query(
       `UPDATE invoices SET ncf_type=$3, contact_id=$4, date=$5, due_date=$6, income_type=$7, payment_terms=$8, subtotal=$9, discount=$10,
-          itbis=$11, itbis_retained=$12, isr_retained=$13, total=$14, notes=$15 WHERE id=$1 AND company_id=$2`,
+          itbis=$11, itbis_retained=$12, isr_retained=$13, total=$14, notes=$15, currency=$16, exchange_rate=$17 WHERE id=$1 AND company_id=$2`,
       [cur.id, req.cid, req.company.is_formal ? (b.ncf_type || null) : null, b.contact_id || null, b.date || cur.date, b.due_date || null,
-        b.income_type || '01', b.payment_terms || null, t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null]
+        b.income_type || '01', b.payment_terms || null, t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null,
+        money.currency, money.exchange_rate]
     );
     await client.query('DELETE FROM invoice_items WHERE invoice_id=$1 AND company_id=$2', [cur.id, req.cid]);
     for (const l of t.lines) {
@@ -174,7 +192,7 @@ router.put('/:id', allow('operator'), async (req, res) => {
         [req.cid, cur.id, l.product_id, l.description, l.qty, l.price, l.discount, l.itbis_rate, l.itbis, l.total, l.kind]
       );
     }
-    if (b.issue) await issue(client, req, { ...cur, ...b, ...t, id: cur.id, doc_type: cur.doc_type, date: b.date || cur.date });
+    if (b.issue) await issue(client, req, { ...cur, ...b, ...t, ...money, id: cur.id, doc_type: cur.doc_type, date: b.date || cur.date });
     return cur.id;
   });
   res.json(await loadInvoice({ query }, req.cid, id));
@@ -203,9 +221,9 @@ router.post('/:id/convert', allow('operator'), async (req, res) => {
     if (q.doc_type !== 'quote') throw new AppError(400, 'Solo cotizaciones');
     const number = await nextNumber(client, req.cid, 'invoice');
     const { rows: [inv] } = await client.query(
-      `INSERT INTO invoices (company_id, doc_type, number, ncf_type, contact_id, date, currency, income_type, payment_terms,
+      `INSERT INTO invoices (company_id, doc_type, number, ncf_type, contact_id, date, currency, exchange_rate, income_type, payment_terms,
           subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, created_by)
-       SELECT company_id, 'invoice', $3, $4, contact_id, CURRENT_DATE, currency, income_type, payment_terms,
+       SELECT company_id, 'invoice', $3, $4, contact_id, CURRENT_DATE, currency, exchange_rate, income_type, payment_terms,
           subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, $5 FROM invoices WHERE id=$1 AND company_id=$2 RETURNING id`,
       [q.id, req.cid, number, req.company.is_formal ? (req.body.ncf_type || 'B02') : null, req.user.id]
     );
@@ -231,9 +249,26 @@ router.post('/:id/payments', allow('operator'), async (req, res) => {
     const amt = round(amount || 0);
     const applied = round(amt + fee);
     if (amt < 0 || fee < 0 || applied <= 0 || applied > balance + 0.001) throw new AppError(400, `Monto inválido. Saldo pendiente: ${balance.toFixed(2)}`);
+    const { rows: [bank] } = await client.query('SELECT currency FROM bank_accounts WHERE id=$1 AND company_id=$2', [bank_account_id, req.cid]);
+    if (!bank) throw new AppError(400, 'Cuenta de banco/caja inválida');
+    if (bank.currency !== 'DOP' && bank.currency !== inv.currency) throw new AppError(400, `Una factura en ${inv.currency === 'DOP' ? 'pesos' : 'dólares'} no se puede cobrar en una cuenta en ${bank.currency}`);
+    const rate = inv.currency === 'DOP' ? 1 : round4(req.body.exchange_rate || inv.exchange_rate);
+    if (!(rate > 0)) throw new AppError(400, 'Indica la tasa del dólar del día del cobro');
+    // pesos de la CxC que salda: proporcional a la tasa de la factura; el último cobro salda exactamente lo que quede
+    const { rows: [arRow] } = await client.query(
+      `SELECT COALESCE(SUM(jl.debit),0) AS ar FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
+        WHERE je.company_id=$1 AND je.source_type='invoice' AND je.source_id=$2 AND je.status='posted'
+          AND jl.account_id=(SELECT id FROM accounts WHERE company_id=$1 AND system_key='ar')`, [req.cid, inv.id]);
+    const { rows: [prev] } = await client.query(
+      `SELECT COALESCE((SELECT SUM(COALESCE(ar_amount, amount + fee)) FROM payments WHERE invoice_id=$2 AND company_id=$1),0)
+            + COALESCE((SELECT SUM(ROUND((total - itbis_retained - isr_retained) * exchange_rate, 2)) FROM invoices
+                         WHERE ref_invoice_id=$2 AND company_id=$1 AND doc_type='credit_note' AND status NOT IN ('draft','void')),0) AS done`, [req.cid, inv.id]);
+    const closes = applied >= balance - 0.001;
+    const arAmount = closes ? round(Number(arRow.ar) - Number(prev.done)) : round(applied * Number(inv.exchange_rate));
+    if (rate !== 1 || inv.currency !== 'DOP') await client.query('UPDATE companies SET usd_rate=$2 WHERE id=$1', [req.cid, rate]);
     const { rows: [pay] } = await client.query(
-      `INSERT INTO payments (company_id, direction, invoice_id, bank_account_id, date, amount, method, reference, fee, fee_type)
-       VALUES ($1,'in',$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [req.cid, inv.id, bank_account_id, date, amt, method, reference || null, fee, feeType]
+      `INSERT INTO payments (company_id, direction, invoice_id, bank_account_id, date, amount, method, reference, fee, fee_type, exchange_rate, ar_amount)
+       VALUES ($1,'in',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`, [req.cid, inv.id, bank_account_id, date, amt, method, reference || null, fee, feeType, rate, arAmount]
     );
     await postPayment(client, req.company, pay, `factura ${inv.ncf || inv.number}`, req.user.id);
     const paid = round(Number(inv.paid) + applied);
@@ -280,3 +315,4 @@ module.exports = router;
 module.exports.createInvoice = createInvoice;
 module.exports.issue = issue;
 module.exports.computeTotals = computeTotals;
+module.exports.round4 = round4;

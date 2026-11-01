@@ -5,7 +5,7 @@ const { allow } = require('../middleware/auth');
 const { upload, resolveFile, relPath } = require('../lib/upload');
 
 const FIELDS = ['name', 'trade_name', 'is_formal', 'rnc', 'charges_itbis', 'itbis_rate', 'address', 'phone', 'email',
-  'website', 'currency', 'invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color', 'payment_instructions'];
+  'website', 'currency', 'invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color', 'payment_instructions', 'usd_rate'];
 
 router.put('/', allow('admin'), async (req, res) => {
   const sets = []; const vals = [];

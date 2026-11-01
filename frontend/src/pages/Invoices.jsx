@@ -28,7 +28,10 @@ export default function Invoices({ quote }) {
     : [['', 'Todas'], ['open', 'Por cobrar'], ['overdue', 'Vencidas'], ['paid', 'Cobradas'], ['draft', 'Borradores'], ['void', 'Anuladas']];
 
   const rows = (data || []).map((i) => ({ ...i, a: invoiceAmounts(i), overdue: ['issued', 'partial'].includes(i.status) && i.due_date && i.due_date < todayIso() }));
-  const sum = (k) => rows.reduce((s, r) => s + r.a[k], 0);
+  // los totales nunca mezclan monedas: pesos arriba y dólares aparte
+  const curs = [...new Set(rows.map((r) => r.currency || 'DOP'))].sort();
+  const sum = (k, cur = 'DOP') => rows.reduce((s, r) => s + ((r.currency || 'DOP') === cur ? r.a[k] : 0), 0);
+  const multi = (k) => curs.map((c) => ({ c, v: sum(k, c) }));
   const canPay = (i) => !quote && ['issued', 'partial'].includes(i.status) && can('operator');
 
   return (
@@ -43,10 +46,10 @@ export default function Invoices({ quote }) {
 
       {!quote && rows.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
-          <Kpi label="Facturado (bruto)" value={sum('gross')} foot={`${rows.filter((r) => r.a.gross).length} factura(s)`} />
-          <Kpi label="Comisiones y retenciones" value={sum('discount') + sum('retained')} foot="Lo que no te llega" tone="muted" />
-          <Kpi label="Neto para ti" value={sum('net')} foot={`Recibido: ${money(sum('received'))}`} tone="brand" />
-          <Kpi label="Por cobrar (neto)" value={sum('netPending')} foot={`Bruto pendiente ${money(sum('balance'))}`} tone={rows.some((r) => r.overdue) ? 'warn' : null} />
+          <Kpi label="Facturado (bruto)" values={multi('gross')} foot={`${rows.filter((r) => r.a.gross).length} factura(s)`} />
+          <Kpi label="Comisiones y retenciones" values={curs.map((c) => ({ c, v: sum('discount', c) + sum('retained', c) }))} foot="Lo que no te llega" tone="muted" />
+          <Kpi label="Neto para ti" values={multi('net')} foot={`Recibido: ${curs.map((c) => money(sum('received', c), c)).join(' + ')}`} tone="brand" />
+          <Kpi label="Por cobrar (neto)" values={multi('netPending')} foot={`Bruto pendiente ${curs.map((c) => money(sum('balance', c), c)).join(' + ')}`} tone={rows.some((r) => r.overdue) ? 'warn' : null} />
         </div>
       )}
 
@@ -75,9 +78,9 @@ export default function Invoices({ quote }) {
                   </div>
                   <StatusBadge map={quote ? QUOTE_STATUS : INVOICE_STATUS} status={i.status} />
                 </div>
-                {quote ? <div className="num text-[16px] font-semibold mt-2">{money(i.total)}</div> : (
+                {quote ? <div className="num text-[16px] font-semibold mt-2">{money(i.total, i.currency)}</div> : (
                   <div className="grid grid-cols-3 gap-2 mt-3 text-[12px]">
-                    <Fig l="Bruto" v={i.a.gross || i.total} />
+                    <Fig l={`Bruto${i.currency === 'USD' ? ' US$' : ''}`} v={i.a.gross || i.total} />
                     <Fig l={i.a.discount ? `Desc. ${i.a.pct ? `${i.a.pct}%` : ''}` : 'Descuento'} v={-(i.a.discount + i.a.retained)} muted />
                     <Fig l="Neto" v={i.a.net} strong />
                   </div>
@@ -85,7 +88,7 @@ export default function Invoices({ quote }) {
                 {canPay(i) && (
                   <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-line">
                     <div className={cx('text-[12.5px]', i.overdue ? 'text-danger font-semibold' : 'text-text-muted')}>
-                      Pendiente <span className="num">{money(i.a.balance)}</span>{i.overdue ? ' · vencida' : ''}
+                      Pendiente <span className="num">{money(i.a.balance, i.currency)}</span>{i.overdue ? ' · vencida' : ''}
                     </div>
                     <button className="btn-brand btn-sm" onClick={(e) => { e.stopPropagation(); setPaying(i); }}><Wallet size={14} /> Cobrar</button>
                   </div>
@@ -113,18 +116,18 @@ export default function Invoices({ quote }) {
                       {!quote && i.due_date && i.a.balance > 0 && <div className={cx('text-[11.5px]', i.overdue ? 'text-danger font-semibold' : 'text-text-faint')}>{i.overdue ? 'Venció' : 'Vence'} {dateShort(i.due_date)}</div>}
                     </td>
                     <td><StatusBadge map={quote ? QUOTE_STATUS : INVOICE_STATUS} status={i.status} /></td>
-                    {quote ? <td className="r"><Money value={i.total} /></td> : <>
-                      <td className="r"><Money value={i.total} className={cx(!i.a.gross && 'text-text-faint line-through')} /></td>
+                    {quote ? <td className="r"><Money value={i.total} currency={i.currency} /></td> : <>
+                      <td className="r"><Money value={i.total} currency={i.currency} className={cx(!i.a.gross && 'text-text-faint line-through')} /></td>
                       <td className="r text-text-muted">
                         {i.a.discount + i.a.retained ? <>
-                          <Money value={-(i.a.discount + i.a.retained)} />
+                          <Money value={-(i.a.discount + i.a.retained)} currency={i.currency} />
                           {i.a.pct > 0 && <div className="text-[11px] text-text-faint">{i.a.pct}%{i.a.expectedFee ? ' (est.)' : ''}</div>}
                         </> : <span className="text-text-faint">—</span>}
                       </td>
-                      <td className="r"><Money value={i.a.net} className="font-semibold" /></td>
+                      <td className="r"><Money value={i.a.net} currency={i.currency} className="font-semibold" /></td>
                       <td className="r whitespace-nowrap">
                         {i.a.balance ? <>
-                          <Money value={i.a.balance} className={cx('font-semibold', i.overdue && 'text-danger')} />
+                          <Money value={i.a.balance} currency={i.currency} className={cx('font-semibold', i.overdue && 'text-danger')} />
                           {canPay(i) && <div><button className="btn-outline btn-sm mt-1.5" onClick={(e) => { e.stopPropagation(); setPaying(i); }}><Wallet size={13} /> Cobrar</button></div>}
                         </> : <span className="text-text-faint">—</span>}
                       </td>
@@ -133,13 +136,15 @@ export default function Invoices({ quote }) {
                 ))}
               </tbody>
               {!quote && (
-                <tfoot><tr>
-                  <td colSpan={3}>Totales ({rows.length})</td>
-                  <td className="r"><Money value={sum('gross')} /></td>
-                  <td className="r"><Money value={-(sum('discount') + sum('retained'))} /></td>
-                  <td className="r"><Money value={sum('net')} /></td>
-                  <td className="r"><Money value={sum('balance')} /></td>
-                </tr></tfoot>
+                <tfoot>{curs.map((c) => (
+                  <tr key={c}>
+                    <td colSpan={3}>Totales{curs.length > 1 ? ` en ${c === 'USD' ? 'dólares' : 'pesos'}` : ''} ({rows.filter((r) => (r.currency || 'DOP') === c).length})</td>
+                    <td className="r"><Money value={sum('gross', c)} currency={c} /></td>
+                    <td className="r"><Money value={-(sum('discount', c) + sum('retained', c))} currency={c} /></td>
+                    <td className="r"><Money value={sum('net', c)} currency={c} /></td>
+                    <td className="r"><Money value={sum('balance', c)} currency={c} /></td>
+                  </tr>
+                ))}</tfoot>
               )}
             </table>
           </div>
@@ -148,6 +153,7 @@ export default function Invoices({ quote }) {
 
       {paying && (
         <PaymentModal open onClose={() => setPaying(null)} balance={paying.a.balance} allowFee title={`Cobrar ${paying.ncf || paying.number}`}
+          currency={paying.currency} invoiceRate={Number(paying.exchange_rate)}
           feeDefaults={{ pct: paying.fee_pct, type: paying.fee_type }}
           onSave={async (body) => { await api.post(`/invoices/${paying.id}/payments`, body); setPaying(null); toast('Cobro registrado'); reload(); }} />
       )}
@@ -155,11 +161,13 @@ export default function Invoices({ quote }) {
   );
 }
 
-function Kpi({ label, value, foot, tone }) {
+function Kpi({ label, values, foot, tone }) {
   return (
     <div className="card p-4 sm:p-5">
       <div className="eyebrow">{label}</div>
-      <div className={cx('num text-[16px] sm:text-[22px] font-semibold mt-2.5 leading-none', tone === 'brand' && 'text-brand', tone === 'warn' && 'text-warn', tone === 'muted' && 'text-text-muted')}>{money(value)}</div>
+      {values.map(({ c, v }, n) => (
+        <div key={c} className={cx('num font-semibold leading-none', n ? 'text-[14px] sm:text-[16px] mt-1.5' : 'text-[16px] sm:text-[22px] mt-2.5', tone === 'brand' && 'text-brand', tone === 'warn' && 'text-warn', tone === 'muted' && 'text-text-muted')}>{money(v, c)}</div>
+      ))}
       <div className="text-[11.5px] sm:text-[12px] text-text-muted mt-2 leading-snug">{foot}</div>
     </div>
   );

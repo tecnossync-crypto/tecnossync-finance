@@ -41,6 +41,7 @@ async function generateOne(client, r, early = false) {
   const items = r.items.map((i) => ({ ...i, description: r.period_label ? `${i.description} — ${period}` : i.description }));
   const inv = await createInvoice(client, ctx, {
     contact_id: r.contact_id, date, due_date: addDays(date, r.due_days), ncf_type: r.ncf_type, income_type: r.income_type,
+    currency: r.currency, exchange_rate: company.usd_rate, // en US$ usa la última tasa registrada
     payment_terms: r.payment_terms, itbis_retention_pct: r.itbis_retention_pct, isr_retention_pct: r.isr_retention_pct,
     notes: r.notes, items,
   }, { recurring_id: r.id, period });

@@ -7,7 +7,7 @@ const { computeTotals } = require('./invoices');
 const { runDue, addMonths, TODAY_RD } = require('../lib/recurring');
 
 const FIELDS = ['contact_id', 'name', 'every_months', 'day_of_month', 'next_date', 'end_date', 'due_days', 'auto_issue', 'period_label',
-  'ncf_type', 'income_type', 'payment_terms', 'itbis_retention_pct', 'isr_retention_pct', 'notes', 'items', 'active'];
+  'ncf_type', 'income_type', 'payment_terms', 'itbis_retention_pct', 'isr_retention_pct', 'notes', 'items', 'active', 'currency'];
 
 const LIST = `SELECT r.*, c.name AS contact_name,
     (SELECT json_build_object('id', i.id, 'number', i.number, 'ncf', i.ncf, 'date', i.date, 'status', i.status)
@@ -29,7 +29,7 @@ async function clean(req, b) {
     ...b, items: JSON.stringify(items), every_months: Number(b.every_months), day_of_month: Math.min(31, Math.max(1, day)),
     due_days: Math.max(0, Number(b.due_days ?? 15)), auto_issue: b.auto_issue !== false, period_label: b.period_label !== false,
     ncf_type: req.company.is_formal ? (b.ncf_type || null) : null, end_date: b.end_date || null, active: b.active !== false,
-    income_type: b.income_type || '01',
+    income_type: b.income_type || '01', currency: b.currency === 'USD' ? 'USD' : 'DOP',
     itbis_retention_pct: Number(b.itbis_retention_pct || 0), isr_retention_pct: Number(b.isr_retention_pct || 0),
   };
 }

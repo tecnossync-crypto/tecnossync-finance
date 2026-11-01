@@ -11,7 +11,7 @@ router.get('/contacts', async (req, res) => {
   if (q) { vals.push(`%${q}%`); where += ` AND (name ILIKE $${vals.length} OR tax_id ILIKE $${vals.length})`; }
   const { rows } = await query(
     `SELECT c.*,
-       (SELECT COALESCE(SUM(total - itbis_retained - isr_retained - paid),0) FROM invoices i WHERE i.contact_id=c.id AND i.company_id=c.company_id AND i.doc_type='invoice' AND i.status IN ('issued','partial')) AS receivable,
+       (SELECT COALESCE(SUM((total - itbis_retained - isr_retained - paid) * exchange_rate),0) FROM invoices i WHERE i.contact_id=c.id AND i.company_id=c.company_id AND i.doc_type='invoice' AND i.status IN ('issued','partial')) AS receivable,
        (SELECT COALESCE(SUM(total - itbis_retained - isr_retained - paid),0) FROM expenses e WHERE e.contact_id=c.id AND e.company_id=c.company_id AND e.status IN ('pending','partial')) AS payable
      FROM contacts c WHERE ${where} ORDER BY name LIMIT 500`, vals
   );

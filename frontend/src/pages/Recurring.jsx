@@ -24,7 +24,9 @@ export default function Recurring() {
   if (loading || !data) return <Loading />;
   const { items, today } = data;
   const active = items.filter((r) => r.active);
-  const monthly = active.reduce((s, r) => s + cycleTotal(r, company) / r.every_months, 0);
+  // en pesos: los cobros en US$ se convierten con la última tasa registrada
+  const toDop = (r) => cycleTotal(r, company) * (r.currency === 'USD' ? Number(company.usd_rate || 0) : 1);
+  const monthly = active.reduce((s, r) => s + toDop(r) / r.every_months, 0);
   const due = active.filter((r) => r.next_date <= today).length;
 
   const act = async (fn, msg) => { try { const r = await fn(); toast(msg(r)); reload(); } catch (e) { toast(e.message, 'error'); } };
@@ -72,7 +74,7 @@ export default function Recurring() {
                   </td>
                   <td>{r.last_invoice ? <Link onClick={(e) => e.stopPropagation()} to={`/facturas/${r.last_invoice.id}`} className="num text-brand hover:underline">{r.last_invoice.ncf || r.last_invoice.number}</Link> : <span className="text-text-faint">—</span>}
                     <div className="text-[11.5px] text-text-faint">{r.invoice_count} generada(s)</div></td>
-                  <td className="r num font-semibold">{money(cycleTotal(r, company))}</td>
+                  <td className="r num font-semibold">{money(cycleTotal(r, company), r.currency)}</td>
                   <td className="r" onClick={(e) => e.stopPropagation()}>
                     {can('operator') && <div className="flex justify-end gap-1">
                       {r.active && <button className="btn-ghost btn-sm" title="Generar la próxima factura ahora"

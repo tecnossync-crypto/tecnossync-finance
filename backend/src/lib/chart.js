@@ -47,6 +47,7 @@ const CHART = [
   ['4.1.03', 'Descuentos y devoluciones en ventas', 'income', true, 'sales_returns'],
   ['4.2.01', 'Otros ingresos', 'income', true, 'other_income'],
   ['4.2.02', 'Ingresos financieros', 'income', true],
+  ['4.2.03', 'Ganancia por diferencia cambiaria', 'income', true, 'fx_gain'],
 
   ['5', 'Costos', 'cost', false],
   ['5.1.01', 'Costo de ventas', 'cost', true, 'cogs'],
@@ -77,6 +78,7 @@ const CHART = [
   ['6.3', 'Gastos financieros', 'expense', false],
   ['6.3.01', 'Comisiones y cargos bancarios', 'expense', true, 'bank_fees'],
   ['6.3.02', 'Intereses pagados', 'expense', true],
+  ['6.3.03', 'Pérdida por diferencia cambiaria', 'expense', true, 'fx_loss'],
 ];
 
 async function seedChart(client, companyId) {

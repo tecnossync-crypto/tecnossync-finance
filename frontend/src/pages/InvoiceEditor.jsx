@@ -7,6 +7,7 @@ import { money, today, addDays, round2 } from '../lib/format';
 import { NCF_TYPES, NCF_CREDIT_NOTE, INCOME_TYPES, FREQUENCIES, INVOICE_STATUS } from '../lib/constants';
 import { Card, Field, Input, Select, Textarea, Toggle, Loading, ErrorBox, useToast, cx, StatusBadge, Money } from '../components/ui';
 import { ContactModal } from './Contacts';
+import { CurrencySelect, RateField, useUsdRate } from '../components/Currency';
 
 const blankLine = () => ({ key: Math.random(), product_id: '', description: '', qty: 1, price: '', discount: '', itbis_rate: null, kind: 'service' });
 
@@ -32,9 +33,11 @@ export default function InvoiceEditor({ quote, recurring }) {
   const [form, setForm] = useState({
     contact_id: '', date: today(), due_date: addDays(today(), 30), ncf_type: company.is_formal ? 'B02' : '',
     income_type: '01', itbis_retention_pct: 0, isr_retention_pct: 0, notes: '', payment_terms: '', items: [blankLine()],
+    currency: 'DOP', exchange_rate: '',
     ...(recurring && { name: '', every_months: 1, next_date: today(), end_date: '', due_days: 15, auto_issue: true, period_label: true, payment_terms: 'Crédito 15 días' }),
   });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const usdRate = useUsdRate();
   const defaultRate = company.charges_itbis ? Number(company.itbis_rate) : 0;
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function InvoiceEditor({ quote, recurring }) {
   useEffect(() => {
     if (!recurring || !id) return;
     api.get(`/recurring/${id}`).then((r) => {
-      setForm({ ...r, end_date: r.end_date || '', ncf_type: r.ncf_type || '', notes: r.notes || '', payment_terms: r.payment_terms || '',
+      setForm({ ...r, currency: r.currency || 'DOP', end_date: r.end_date || '', ncf_type: r.ncf_type || '', notes: r.notes || '', payment_terms: r.payment_terms || '',
         items: r.items.map((it) => ({ ...it, key: Math.random() })) });
       setHistory(r.invoices);
       setReady(true);
@@ -63,6 +66,7 @@ export default function InvoiceEditor({ quote, recurring }) {
         payment_terms: inv.payment_terms || '',
         itbis_retention_pct: pct(inv.itbis_retained, inv.itbis), isr_retention_pct: pct(inv.isr_retained, inv.subtotal - inv.discount),
         items: inv.items.map((it) => ({ ...it, key: it.id })),
+        currency: inv.currency || 'DOP', exchange_rate: inv.currency === 'USD' ? Number(inv.exchange_rate) : '',
         ...(recurring && {
           name: `${inv.items[0]?.description || 'Servicio'} — ${inv.contact_name || 'cliente'}`, every_months: 1, next_date: addDays(inv.date, 30),
           end_date: '', due_days: 15, auto_issue: true, period_label: true, notes: inv.notes || '', payment_terms: inv.payment_terms || 'Crédito 15 días',
@@ -153,6 +157,9 @@ export default function InvoiceEditor({ quote, recurring }) {
                   <button type="button" onClick={() => setNewContact(true)} className="btn-outline px-3" title="Nuevo cliente"><UserPlus size={16} /></button>
                 </div>
               </Field>
+              <CurrencySelect value={form.currency} disabled={creditNote} onChange={(c) => set({ currency: c, exchange_rate: c === 'USD' ? (form.exchange_rate || usdRate || '') : '' })} />
+              {form.currency === 'USD' && !recurring && <RateField value={form.exchange_rate} disabled={creditNote} onChange={(v) => set({ exchange_rate: v })} />}
+              {form.currency === 'USD' && recurring && <p className="sm:col-span-2 lg:col-span-3 self-end text-[12.5px] text-text-muted pb-2">Cada factura se genera en dólares con la última tasa que registraste{usdRate ? ` (hoy ${usdRate})` : ''}. Puedes actualizarla en Ajustes.</p>}
               {recurring ? <RecurringFields form={form} set={set} /> : <>
               <Field label="Fecha"><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value, due_date: addDays(e.target.value, terms) })} /></Field>
               {quote ? (
@@ -242,18 +249,21 @@ export default function InvoiceEditor({ quote, recurring }) {
         <aside className="xl:sticky xl:top-6 space-y-4">
           <div className="rounded-2xl bg-ink text-white p-5">
             <div className="eyebrow !text-white/45 mb-4">Resumen</div>
-            <Row label="Subtotal" value={totals.subtotal} />
-            {totals.discount > 0 && <Row label="Descuentos" value={-totals.discount} />}
-            {company.charges_itbis && <Row label="ITBIS" value={totals.itbis} />}
+            <Row label="Subtotal" value={totals.subtotal} c={form.currency} />
+            {totals.discount > 0 && <Row label="Descuentos" value={-totals.discount} c={form.currency} />}
+            {company.charges_itbis && <Row label="ITBIS" value={totals.itbis} c={form.currency} />}
             <div className="flex items-end justify-between pt-4 mt-3 border-t border-ink-line">
               <span className="text-white/60 text-[13px]">{recurring ? 'Total por cobro' : 'Total'}</span>
-              <span className="num text-[28px] font-semibold text-lime leading-none">{money(totals.total)}</span>
+              <span className="num text-[28px] font-semibold text-lime leading-none">{money(totals.total, form.currency)}</span>
             </div>
+            {form.currency === 'USD' && Number(form.exchange_rate) > 0 && (
+              <div className="text-right text-white/50 text-[12px] mt-1.5">≈ {money(totals.total * form.exchange_rate)} a {Number(form.exchange_rate)}</div>
+            )}
             {(totals.itbisRet > 0 || totals.isrRet > 0) && (
               <div className="mt-4 pt-3 border-t border-ink-line space-y-1.5">
-                {totals.itbisRet > 0 && <Row label="ITBIS retenido por cliente" value={-totals.itbisRet} />}
-                {totals.isrRet > 0 && <Row label="ISR retenido por cliente" value={-totals.isrRet} />}
-                <Row label="Neto a cobrar" value={totals.receivable} strong />
+                {totals.itbisRet > 0 && <Row label="ITBIS retenido por cliente" value={-totals.itbisRet} c={form.currency} />}
+                {totals.isrRet > 0 && <Row label="ISR retenido por cliente" value={-totals.isrRet} c={form.currency} />}
+                <Row label="Neto a cobrar" value={totals.receivable} strong c={form.currency} />
               </div>
             )}
           </div>
@@ -297,10 +307,10 @@ export default function InvoiceEditor({ quote, recurring }) {
   );
 }
 
-function Row({ label, value, strong }) {
+function Row({ label, value, strong, c }) {
   return (
     <div className={cx('flex justify-between py-1 text-[13.5px]', strong ? 'font-semibold text-white' : 'text-white/75')}>
-      <span>{label}</span><span className="num">{money(value)}</span>
+      <span>{label}</span><span className="num">{money(value, c)}</span>
     </div>
   );
 }

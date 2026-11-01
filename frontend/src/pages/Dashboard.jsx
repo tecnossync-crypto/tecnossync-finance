@@ -137,7 +137,7 @@ export default function Dashboard() {
                 <tr key={i.id} className="row-link" onClick={() => navigate(`/facturas/${i.id}`)}>
                   <td><div className="font-semibold">{i.contact || 'Sin cliente'}</div><div className="num text-[12px] text-text-faint">{i.ncf || i.number}</div></td>
                   <td><Badge tone="danger"><AlertCircle size={12} /> {date(i.due_date)}</Badge></td>
-                  <td className="r"><Money value={i.balance} /></td>
+                  <td className="r"><Money value={i.balance} currency={i.currency} /></td>
                 </tr>
               ))}
             </tbody></table>

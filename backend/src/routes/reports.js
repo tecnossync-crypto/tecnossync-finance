@@ -63,7 +63,9 @@ router.get('/balance-sheet', async (req, res) => {
 router.get('/aging/:kind', async (req, res) => {
   const isAR = req.params.kind === 'receivable';
   const sql = isAR
-    ? `SELECT i.id, i.number AS doc, i.ncf, i.date, i.due_date, c.name AS contact, (i.total - i.itbis_retained - i.isr_retained - i.paid) AS balance
+    ? `SELECT i.id, i.number AS doc, i.ncf, i.date, i.due_date, c.name AS contact, i.currency,
+              ROUND((i.total - i.itbis_retained - i.isr_retained - i.paid) * i.exchange_rate, 2) AS balance,
+              (i.total - i.itbis_retained - i.isr_retained - i.paid) AS balance_fx
          FROM invoices i LEFT JOIN contacts c ON c.id=i.contact_id
         WHERE i.company_id=$1 AND i.doc_type='invoice' AND i.status IN ('issued','partial')`
     : `SELECT e.id, e.description AS doc, e.ncf, e.date, e.due_date, c.name AS contact, (e.total - e.itbis_retained - e.isr_retained - e.paid) AS balance
@@ -95,8 +97,8 @@ router.get('/dashboard', async (req, res) => {
       GROUP BY 1 ORDER BY 1`, [cid]
   );
   const { rows: [ar] } = await query(
-    `SELECT COALESCE(SUM(total - itbis_retained - isr_retained - paid),0) AS open,
-            COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE THEN total - itbis_retained - isr_retained - paid END),0) AS overdue,
+    `SELECT COALESCE(SUM((total - itbis_retained - isr_retained - paid) * exchange_rate),0) AS open,
+            COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE THEN (total - itbis_retained - isr_retained - paid) * exchange_rate END),0) AS overdue,
             COUNT(*) FILTER (WHERE due_date < CURRENT_DATE)::int AS overdue_count
        FROM invoices WHERE company_id=$1 AND doc_type='invoice' AND status IN ('issued','partial')`, [cid]
   );
@@ -123,7 +125,7 @@ router.get('/dashboard', async (req, res) => {
       GROUP BY a.name HAVING SUM(jl.debit - jl.credit) > 0 ORDER BY 2 DESC LIMIT 6`, [cid, ms]
   );
   const { rows: overdue } = await query(
-    `SELECT i.id, i.number, i.ncf, i.due_date, c.name AS contact, (i.total - i.itbis_retained - i.isr_retained - i.paid) AS balance
+    `SELECT i.id, i.number, i.ncf, i.due_date, c.name AS contact, i.currency, (i.total - i.itbis_retained - i.isr_retained - i.paid) AS balance
        FROM invoices i LEFT JOIN contacts c ON c.id=i.contact_id
       WHERE i.company_id=$1 AND i.doc_type='invoice' AND i.status IN ('issued','partial') AND i.due_date < CURRENT_DATE
       ORDER BY i.due_date LIMIT 6`, [cid]
@@ -197,7 +199,15 @@ router.get('/dgii/607', async (req, res) => {
       WHERE i.company_id=$1 AND i.doc_type IN ('invoice','credit_note') AND i.status NOT IN ('draft','void') AND i.ncf IS NOT NULL
         AND i.date BETWEEN $2 AND $3 ORDER BY i.date`, [req.cid, from, to]
   );
-  for (const i of rows) i.isr_retained = round(Number(i.isr_retained) + Number(i.pay_withheld || 0));
+  for (const i of rows) {
+    i.isr_retained = round(Number(i.isr_retained) + Number(i.pay_withheld || 0));
+    // facturas en US$: la DGII se reporta en pesos a la tasa de la factura
+    const r = Number(i.exchange_rate || 1);
+    if (r !== 1) {
+      for (const k of ['subtotal', 'discount', 'itbis', 'itbis_retained', 'isr_retained', 'total']) i[k] = round(Number(i[k]) * r);
+      if (i.pays) i.pays = Object.fromEntries(Object.entries(i.pays).map(([m, v]) => [m, round(Number(v) * r)]));
+    }
+  }
   const records = rows.map((i) => {
     // las notas de crédito no llevan forma de pago; las retenciones no son venta a crédito
     const pays = i.doc_type === 'credit_note' ? {} : i.pays || {};
@@ -227,10 +237,10 @@ router.get('/dgii/608', async (req, res) => {
 router.get('/itbis', async (req, res) => {
   const { from, to } = period(req.query);
   const { rows: [sales] } = await query(
-    `SELECT COALESCE(SUM(CASE WHEN doc_type='credit_note' THEN -(subtotal-discount) ELSE subtotal-discount END),0) AS base,
-            COALESCE(SUM(CASE WHEN doc_type='credit_note' THEN -itbis ELSE itbis END),0) AS itbis,
-            COALESCE(SUM(itbis_retained),0) AS itbis_withheld,
-            COALESCE(SUM(CASE WHEN itbis = 0 THEN subtotal-discount ELSE 0 END),0) AS exempt
+    `SELECT COALESCE(SUM(CASE WHEN doc_type='credit_note' THEN -(subtotal-discount) ELSE subtotal-discount END * exchange_rate),0) AS base,
+            COALESCE(SUM(CASE WHEN doc_type='credit_note' THEN -itbis ELSE itbis END * exchange_rate),0) AS itbis,
+            COALESCE(SUM(itbis_retained * exchange_rate),0) AS itbis_withheld,
+            COALESCE(SUM(CASE WHEN itbis = 0 THEN (subtotal-discount) * exchange_rate ELSE 0 END),0) AS exempt
        FROM invoices WHERE company_id=$1 AND doc_type IN ('invoice','credit_note') AND status NOT IN ('draft','void') AND date BETWEEN $2 AND $3`,
     [req.cid, from, to]
   );

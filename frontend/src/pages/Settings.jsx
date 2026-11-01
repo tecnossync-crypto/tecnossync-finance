@@ -78,7 +78,7 @@ function CompanyForm() {
 }
 
 function InvoiceSettings() {
-  const { form, set, save, error } = useCompanyForm(['invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color', 'payment_instructions']);
+  const { form, set, save, error } = useCompanyForm(['invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color', 'payment_instructions', 'usd_rate']);
   return (
     <Card title="Numeración y apariencia" className="max-w-3xl">
       <div className="grid sm:grid-cols-4 gap-4">
@@ -92,7 +92,10 @@ function InvoiceSettings() {
         <Field label="Pie de factura" className="sm:col-span-3" hint="Ej. políticas de devolución, agradecimiento.">
           <Textarea value={form.invoice_footer || ''} onChange={(e) => set({ invoice_footer: e.target.value })} />
         </Field>
-        <Field label="Datos para pago" className="sm:col-span-4" hint="Se imprimen en facturas y estados de cuenta. Ej. Banco Popular · Cta. corriente 000-000000-0 · a nombre de Tecnossync">
+        <Field label="Tasa del dólar" hint="RD$ por US$. Se propone en facturas y cobros en dólares; se actualiza sola con la última que uses.">
+          <Input type="number" step="0.0001" className="num" value={form.usd_rate || ''} onChange={(e) => set({ usd_rate: e.target.value })} placeholder="60.00" />
+        </Field>
+        <Field label="Datos para pago" className="sm:col-span-3" hint="Se imprimen en facturas y estados de cuenta. Ej. Banco Popular · Cta. corriente 000-000000-0 · a nombre de Tecnossync">
           <Textarea value={form.payment_instructions || ''} onChange={(e) => set({ payment_instructions: e.target.value })} />
         </Field>
       </div>

@@ -5,6 +5,7 @@ import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, date, dateShort, today, amountInWords, round2, invoiceAmounts } from '../lib/format';
 import { INVOICE_STATUS, QUOTE_STATUS, NCF_TITLE, PAY_METHODS } from '../lib/constants';
+import { RateField, useUsdRate } from '../components/Currency';
 import { Field, Input, Loading, Modal, Select, StatusBadge, useData, useToast, ErrorBox, Tabs, Money, cx } from '../components/ui';
 
 export default function InvoiceView({ quote }) {
@@ -90,22 +91,23 @@ export default function InvoiceView({ quote }) {
             {!quote && inv.doc_type === 'invoice' && <>
               {(() => {
                 const a = invoiceAmounts(inv);
-                const R = ({ l, v, cls, hint }) => <div className="flex justify-between gap-3"><span className="text-text-muted">{l}{hint && <span className="text-text-faint text-[11.5px]"> {hint}</span>}</span><Money value={v} className={cls} /></div>;
+                const R = ({ l, v, cls, hint }) => <div className="flex justify-between gap-3"><span className="text-text-muted">{l}{hint && <span className="text-text-faint text-[11.5px]"> {hint}</span>}</span><Money value={v} currency={inv.currency} className={cls} /></div>;
                 return <>
                   <div className="mt-4 space-y-1.5 text-[13.5px]">
                     <R l="Bruto (facturado)" v={inv.total} />
                     {a.retained > 0 && <R l="Retenciones en factura" v={-a.retained} />}
                     {a.fees > 0 && <R l="Comisión / retención cobrada" v={-a.fees} />}
                     {a.expectedFee > 0 && <R l="Descuento estimado" hint={`(${a.pct}% de lo pendiente)`} v={-a.expectedFee} />}
-                    <div className="flex justify-between pt-1.5 border-t border-line font-semibold"><span>Neto para ti</span><Money value={a.net} className="text-brand" /></div>
+                    <div className="flex justify-between pt-1.5 border-t border-line font-semibold"><span>Neto para ti</span><Money value={a.net} currency={inv.currency} className="text-brand" /></div>
+                    {inv.currency === 'USD' && <div className="text-right text-[12px] text-text-muted">Tasa {Number(inv.exchange_rate)} · ≈ {money(a.net * inv.exchange_rate)}</div>}
                   </div>
                   <div className="mt-3 pt-3 border-t border-line space-y-1.5 text-[13.5px]">
                     <R l="Recibido en banco" v={a.received} />
                     <div className="flex justify-between items-end">
                       <span className="font-semibold">Pendiente</span>
-                      <Money value={a.balance} className="text-[20px] font-semibold" />
+                      <Money value={a.balance} currency={inv.currency} className="text-[20px] font-semibold" />
                     </div>
-                    {a.expectedFee > 0 && <div className="text-right text-[12px] text-text-muted">te llegarían ~{money(a.netPending)}</div>}
+                    {a.expectedFee > 0 && <div className="text-right text-[12px] text-text-muted">te llegarían ~{money(a.netPending, inv.currency)}</div>}
                   </div>
                   {['issued', 'partial'].includes(inv.status) && can('operator') && (
                     <button className="btn-brand w-full mt-4" onClick={() => setPaying(true)}><Wallet size={15} /> Registrar cobro</button>
@@ -121,9 +123,9 @@ export default function InvoiceView({ quote }) {
                 {inv.payments.map((p) => (
                   <li key={p.id} className="flex items-start justify-between gap-2 text-[13px]">
                     <div>
-                      <div className="font-semibold">{money(p.amount + p.fee)}</div>
+                      <div className="font-semibold">{money(p.amount + p.fee, inv.currency)}{inv.currency === 'USD' && <span className="text-text-faint font-normal text-[12px]"> · tasa {Number(p.exchange_rate)}</span>}</div>
                       <div className="text-text-muted text-[12px]">{date(p.date)} · {p.bank_name}{p.reference ? ` · ${p.reference}` : ''}</div>
-                      {p.fee > 0 && <div className="text-[12px] text-text-muted">Recibido {money(p.amount)} · {p.fee_type === 'withholding' ? 'retención' : 'comisión'} {money(p.fee)}</div>}
+                      {p.fee > 0 && <div className="text-[12px] text-text-muted">Recibido {money(p.amount, inv.currency)} · {p.fee_type === 'withholding' ? 'retención' : 'comisión'} {money(p.fee, inv.currency)}</div>}
                     </div>
                     {can('accountant') && <button className="text-text-faint hover:text-danger" title="Eliminar cobro" onClick={() => act(() => api.del(`/invoices/${id}/payments/${p.id}`), 'Cobro eliminado')}><Trash2 size={14} /></button>}
                   </li>
@@ -135,7 +137,7 @@ export default function InvoiceView({ quote }) {
         </aside>
       </div>
 
-      <PaymentModal open={paying} onClose={() => setPaying(false)} balance={balance} allowFee
+      <PaymentModal open={paying} onClose={() => setPaying(false)} balance={balance} allowFee currency={inv.currency} invoiceRate={Number(inv.exchange_rate)}
         feeDefaults={{ pct: inv.contact_fee_pct, type: inv.contact_fee_type }}
         onSave={async (body) => { await api.post(`/invoices/${id}/payments`, body); setPaying(false); toast('Cobro registrado'); reload(); }} title="Registrar cobro" />
       <VoidModal open={voiding} onClose={() => setVoiding(false)} ncf={inv.ncf}
@@ -198,6 +200,7 @@ function LetterSheet({ inv, company, logo, quote }) {
           <dt className="text-[#777]">Fecha</dt><dd className="num text-right">{dateShort(inv.date)}</dd>
           {inv.due_date && <><dt className="text-[#777]">{quote ? 'Válida hasta' : 'Vence'}</dt><dd className="num text-right">{dateShort(inv.due_date)}</dd></>}
           {inv.payment_terms && <><dt className="text-[#777]">Condición</dt><dd className="text-right">{inv.payment_terms}</dd></>}
+          {inv.currency === 'USD' && <><dt className="text-[#777]">Moneda</dt><dd className="text-right">Dólares (US$) · tasa {Number(inv.exchange_rate)}</dd></>}
           {inv.period && <><dt className="text-[#777]">Período</dt><dd className="text-right capitalize">{inv.period}</dd></>}
           {inv.ncf && <><dt className="text-[#777]">Referencia</dt><dd className="num text-right">{inv.number}</dd></>}
         </dl>
@@ -283,16 +286,16 @@ function TicketSheet({ inv, company, quote }) {
       {inv.items.map((it) => (
         <div key={it.id} className="mb-1">
           <div>{it.description}</div>
-          <div className="flex justify-between"><span>{Number(it.qty)} x {money(it.price, 'DOP', { symbol: false })}</span><span>{money(it.qty * it.price - it.discount, 'DOP', { symbol: false })}</span></div>
+          <div className="flex justify-between"><span>{Number(it.qty)} x {money(it.price, inv.currency, { symbol: false })}</span><span>{money(it.qty * it.price - it.discount, inv.currency, { symbol: false })}</span></div>
         </div>
       ))}
       <div className="border-t border-dashed border-black my-2" />
-      <div className="flex justify-between"><span>Subtotal</span><span>{money(inv.subtotal - inv.discount, 'DOP', { symbol: false })}</span></div>
-      {company.charges_itbis && <div className="flex justify-between"><span>ITBIS</span><span>{money(inv.itbis, 'DOP', { symbol: false })}</span></div>}
-      <div className="flex justify-between font-bold text-[13px] mt-1"><span>TOTAL</span><span>{money(inv.total)}</span></div>
+      <div className="flex justify-between"><span>Subtotal</span><span>{money(inv.subtotal - inv.discount, inv.currency, { symbol: false })}</span></div>
+      {company.charges_itbis && <div className="flex justify-between"><span>ITBIS</span><span>{money(inv.itbis, inv.currency, { symbol: false })}</span></div>}
+      <div className="flex justify-between font-bold text-[13px] mt-1"><span>TOTAL</span><span>{money(inv.total, inv.currency)}</span></div>
       {inv.doc_type === 'invoice' && inv.paid > 0 && inv.status !== 'void' && <>
-        <div className="flex justify-between"><span>Pagado</span><span>{money(inv.paid, 'DOP', { symbol: false })}</span></div>
-        <div className="flex justify-between font-bold"><span>Pendiente</span><span>{money(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid, 'DOP', { symbol: false })}</span></div>
+        <div className="flex justify-between"><span>Pagado</span><span>{money(inv.paid, inv.currency, { symbol: false })}</span></div>
+        <div className="flex justify-between font-bold"><span>Pendiente</span><span>{money(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid, inv.currency, { symbol: false })}</span></div>
       </>}
       <div className="border-t border-dashed border-black my-2" />
       <div className="text-center">{company.invoice_footer || '¡Gracias por su compra!'}</div>
@@ -308,20 +311,26 @@ const FEE_TYPES = [['', 'Ninguno'], ['commission', 'Comisión'], ['withholding',
 
 // Cobro (o pago). Con allowFee, el cobro puede venir con un descuento: comisión de una plataforma o
 // pasarela (va a gasto) o retención del cliente (impuesto adelantado). La factura baja por el total.
-export function PaymentModal({ open, onClose, onSave, balance, title, allowFee, feeDefaults }) {
+export function PaymentModal({ open, onClose, onSave, balance, title, allowFee, feeDefaults, currency = 'DOP', invoiceRate = 1 }) {
   const [banks, setBanks] = useState([]);
+  const usdRate = useUsdRate();
+  const usd = currency === 'USD';
   const [form, setForm] = useState({});
   const [error, setError] = useState(null);
   useEffect(() => {
     if (!open) return;
     setError(null);
     const pct = allowFee && feeDefaults?.pct ? Number(feeDefaults.pct) : 0;
-    api.get('/banks').then((b) => {
+    api.get('/banks').then((all) => {
+      // en pesos se cobra en cuentas en pesos; en dólares, en cuentas en dólares o en pesos (convertido)
+      const b = all.filter((x) => x.kind !== 'card' && (x.currency === 'DOP' || x.currency === currency));
       setBanks(b);
-      setForm({ applied: balance.toFixed(2), date: today(), method: 'transfer', bank_account_id: b.find((x) => x.kind === 'bank')?.id || b[0]?.id, reference: '',
+      const pick = b.find((x) => x.kind === 'bank' && x.currency === currency) || b.find((x) => x.kind === 'bank') || b[0];
+      setForm({ applied: balance.toFixed(2), date: today(), method: 'transfer', bank_account_id: pick?.id, reference: '', exchange_rate: usd ? (usdRate || invoiceRate) : '',
         fee_type: pct ? feeDefaults.type || 'commission' : '', fee_pct: pct || '', fee: pct ? round2(balance * pct / 100).toFixed(2) : '' });
     });
-  }, [open, balance, allowFee, feeDefaults?.pct, feeDefaults?.type]);
+  }, [open, balance, allowFee, feeDefaults?.pct, feeDefaults?.type, currency]);
+  useEffect(() => { if (open && usd && usdRate) setForm((f) => (f.exchange_rate ? f : { ...f, exchange_rate: usdRate })); }, [open, usd, usdRate]);
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const applied = Number(form.applied || 0);
   const fee = form.fee_type ? Number(form.fee || 0) : 0;
@@ -332,14 +341,14 @@ export function PaymentModal({ open, onClose, onSave, balance, title, allowFee, 
   const save = async () => {
     try {
       const { applied: _a, fee_pct: _p, ...rest } = form;
-      await onSave(allowFee ? { ...rest, amount: received, fee, fee_type: fee ? form.fee_type : null } : { ...rest, amount: applied });
+      await onSave(allowFee ? { ...rest, amount: received, fee, fee_type: fee ? form.fee_type : null, exchange_rate: usd ? Number(form.exchange_rate) : undefined } : { ...rest, amount: applied });
     } catch (e) { setError(e); }
   };
   return (
     <Modal open={open} onClose={onClose} title={title}
       footer={<><button className="btn-ghost" onClick={onClose}>Cancelar</button><button className="btn-primary" onClick={save}>Guardar</button></>}>
       <div className="grid grid-cols-2 gap-4">
-        <Field label={allowFee ? 'Monto que se salda de la factura' : 'Monto'} className="col-span-2" hint={`Pendiente: ${money(balance)}`}>
+        <Field label={allowFee ? `Monto que se salda de la factura${usd ? ' (US$)' : ''}` : 'Monto'} className="col-span-2" hint={`Pendiente: ${money(balance, currency)}`}>
           <Input type="number" step="0.01" className="num text-right text-[16px]" value={form.applied} onChange={(e) => setApplied(e.target.value)} />
         </Field>
         {allowFee && <>
@@ -350,15 +359,28 @@ export function PaymentModal({ open, onClose, onSave, balance, title, allowFee, 
             <Field label="Porcentaje"><div className="relative"><Input type="number" step="0.01" min="0" max="100" className="num text-right pr-8" value={form.fee_pct} onChange={(e) => setPct(e.target.value)} placeholder="15" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-faint">%</span></div></Field>
             <Field label="Monto descontado"><Input type="number" step="0.01" min="0" className="num text-right" value={form.fee} onChange={(e) => set({ fee: e.target.value, fee_pct: '' })} /></Field>
             <div className="col-span-2 rounded-lg bg-paper px-3.5 py-3 text-[13px] space-y-1">
-              <div className="flex justify-between"><span className="text-text-muted">Se salda de la factura</span><span className="num">{money(applied)}</span></div>
-              <div className="flex justify-between"><span className="text-text-muted">{form.fee_type === 'withholding' ? 'Retenido (impuesto adelantado)' : 'Comisión (gasto)'}</span><span className="num">−{money(fee)}</span></div>
-              <div className="flex justify-between font-semibold pt-1 border-t border-line"><span>Entra al banco</span><span className={cx('num', received < 0 && 'text-danger')}>{money(received)}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">Se salda de la factura</span><span className="num">{money(applied, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-text-muted">{form.fee_type === 'withholding' ? 'Retenido (impuesto adelantado)' : 'Comisión (gasto)'}</span><span className="num">−{money(fee, currency)}</span></div>
+              <div className="flex justify-between font-semibold pt-1 border-t border-line"><span>Entra al banco</span><span className={cx('num', received < 0 && 'text-danger')}>{money(received, currency)}</span></div>
             </div>
           </>}
         </>}
+        {usd && allowFee && <>
+          <RateField label="Tasa del día del cobro" value={form.exchange_rate} onChange={(v) => set({ exchange_rate: v })} className="col-span-2" hint={`La factura se emitió a ${invoiceRate}. La diferencia se registra como ganancia o pérdida cambiaria.`} />
+          {Number(form.exchange_rate) > 0 && (() => {
+            const fx = Math.round(applied * (Number(form.exchange_rate) - invoiceRate) * 100) / 100;
+            const bankCur = banks.find((b) => String(b.id) === String(form.bank_account_id))?.currency;
+            return (
+              <div className="col-span-2 rounded-lg bg-paper px-3.5 py-3 text-[13px] space-y-1">
+                <div className="flex justify-between"><span className="text-text-muted">En pesos al banco{bankCur === 'DOP' ? '' : ' (equivalente)'}</span><span className="num">{money(received * Number(form.exchange_rate))}</span></div>
+                {fx !== 0 && <div className="flex justify-between"><span className="text-text-muted">{fx > 0 ? 'Ganancia' : 'Pérdida'} cambiaria</span><span className={cx('num', fx > 0 ? 'text-brand' : 'text-danger')}>{money(fx)}</span></div>}
+              </div>
+            );
+          })()}
+        </>}
         <Field label="Fecha"><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} /></Field>
         <Field label="Método"><Select value={form.method} onChange={(e) => set({ method: e.target.value })}>{PAY_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
-        <Field label="Cuenta" className="col-span-2"><Select value={form.bank_account_id} onChange={(e) => set({ bank_account_id: e.target.value })}>{banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
+        <Field label="Cuenta" className="col-span-2"><Select value={form.bank_account_id} onChange={(e) => set({ bank_account_id: e.target.value })}>{banks.map((b) => <option key={b.id} value={b.id}>{b.name}{b.currency !== 'DOP' ? ` (${b.currency})` : ''}</option>)}</Select></Field>
         <Field label="Referencia" className="col-span-2"><Input value={form.reference} onChange={(e) => set({ reference: e.target.value })} placeholder="No. de transferencia, cheque…" /></Field>
         <div className="col-span-2"><ErrorBox error={error} /></div>
       </div>

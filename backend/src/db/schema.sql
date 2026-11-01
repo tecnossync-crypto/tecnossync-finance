@@ -1,4 +1,4 @@
--- Tecnossync Ledger — esquema base (multiempresa: toda tabla de negocio lleva company_id)
+-- Tecnossync Ledger - esquema base (multiempresa: toda tabla de negocio lleva company_id)
 
 CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS recurring_invoices (
   end_date      DATE,
   due_days      INTEGER NOT NULL DEFAULT 15,
   auto_issue    BOOLEAN NOT NULL DEFAULT true,     -- false = deja la factura en borrador para revisarla
-  period_label  BOOLEAN NOT NULL DEFAULT true,     -- agrega "— noviembre 2026" a cada línea
+  period_label  BOOLEAN NOT NULL DEFAULT true,     -- agrega "- noviembre 2026" a cada línea
   ncf_type      TEXT,
   income_type   TEXT NOT NULL DEFAULT '01',
   payment_terms TEXT,
@@ -282,3 +282,24 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS fee_type TEXT CHECK (fee_type IN (
 -- Descuento habitual de un cliente, para precargarlo al registrar el cobro
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS payment_fee_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS payment_fee_type TEXT CHECK (payment_fee_type IN ('commission','withholding'));
+
+-- Multimoneda: la contabilidad va en pesos; facturas y cobros en US$ guardan su tasa (pesos por dólar)
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS ar_amount NUMERIC(14,2);          -- pesos que salda de la cuenta por cobrar
+ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS fx_amount NUMERIC(14,2);     -- monto en la otra moneda (+ debe, - haber)
+ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS fx_currency TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS usd_rate NUMERIC(12,4);          -- última tasa usada, se propone en la próxima
+ALTER TABLE recurring_invoices ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'DOP';
+
+-- Cuentas de diferencia cambiaria (para empresas creadas antes de existir)
+INSERT INTO accounts (company_id, code, name, type, parent_id, is_postable, system_key)
+SELECT c.id, '4.2.03', 'Ganancia por diferencia cambiaria', 'income',
+       (SELECT parent_id FROM accounts WHERE company_id=c.id AND system_key='other_income'), true, 'fx_gain'
+  FROM companies c
+ WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE company_id=c.id AND (system_key='fx_gain' OR code='4.2.03'));
+INSERT INTO accounts (company_id, code, name, type, parent_id, is_postable, system_key)
+SELECT c.id, '6.3.03', 'Pérdida por diferencia cambiaria', 'expense',
+       (SELECT parent_id FROM accounts WHERE company_id=c.id AND system_key='bank_fees'), true, 'fx_loss'
+  FROM companies c
+ WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE company_id=c.id AND (system_key='fx_loss' OR code='6.3.03'));
