@@ -26,6 +26,7 @@ export default function InvoiceView({ quote }) {
     return () => url && URL.revokeObjectURL(url);
   }, [company.has_logo]);
 
+  // El nombre del PDF al guardar sale del título de la página
   useEffect(() => {
     if (!inv) return;
     const prev = document.title;
@@ -129,162 +130,113 @@ function docTitle(inv, company, quote) {
   return 'Factura';
 }
 
-// Plantilla carta: pensada para imprimir o "Guardar como PDF" en una hoja carta limpia.
 function LetterSheet({ inv, company, logo, quote }) {
   const accent = company.accent_color || '#8B2FC9';
-  const tint = `${accent}12`;
   const showItbis = company.charges_itbis;
-  const isInvoice = !quote && inv.doc_type === 'invoice';
-  const net = inv.total - inv.itbis_retained - inv.isr_retained;
-  const balance = net - inv.paid;
-  const stamp = inv.status === 'void' ? ['ANULADA', '#C8423B'] : isInvoice && inv.status === 'paid' ? ['PAGADA', '#14855F'] : null;
-  const m = (v) => money(v, inv.currency, { symbol: false });
-  const label = 'text-[9.5px] font-semibold uppercase tracking-[0.16em]';
-
   return (
-    <article className="print-sheet invoice-sheet card bg-white w-full max-w-[860px] sm:min-h-[1100px] mx-auto text-[12.5px] leading-[1.5] text-[#1c1a24] tabular-nums flex flex-col overflow-hidden">
-      <div className="h-[6px] shrink-0" style={{ background: accent }} />
-      <div className="relative flex-1 flex flex-col px-8 sm:px-12 pt-9 pb-8">
-        {stamp && (
-          <div className="absolute right-10 top-[150px] rotate-[-12deg] rounded-md border-[3px] px-4 py-1 font-display text-[26px] font-extrabold tracking-[0.2em] opacity-80 pointer-events-none"
-            style={{ color: stamp[1], borderColor: stamp[1] }}>{stamp[0]}</div>
-        )}
-        {inv.status === 'draft' && <div className="mb-5 rounded-md border border-dashed border-line-strong text-text-muted text-center text-[12px] py-1 no-print">Borrador — aún no tiene validez</div>}
-
-        {/* Encabezado: emisor y documento */}
-        <header className="flex flex-col sm:flex-row justify-between gap-8">
-          <div className="flex gap-4 min-w-0">
-            {logo && <img src={logo} alt="" className="h-[68px] w-[68px] object-contain shrink-0" />}
-            <div className="min-w-0">
-              <div className="font-display text-[21px] font-bold leading-tight">{company.trade_name || company.name}</div>
-              {company.trade_name && company.trade_name !== company.name && <div className="text-[11.5px] text-[#6b6778]">{company.name}</div>}
-              <div className="mt-1.5 text-[11.5px] text-[#55515f] leading-[1.6]">
-                {company.is_formal && company.rnc && <div>RNC <span className="font-semibold text-[#1c1a24]">{company.rnc}</span></div>}
-                {company.address && <div>{company.address}</div>}
-                <div>{[company.phone, company.email, company.website].filter(Boolean).join('  ·  ')}</div>
-              </div>
+    <article className="print-sheet card bg-white p-6 sm:p-10 max-w-[860px] w-full mx-auto text-[13px] text-[#111]">
+      {inv.status === 'void' && <div className="mb-6 rounded-md border-2 border-danger text-danger text-center font-display font-semibold tracking-widest py-1">ANULADA</div>}
+      {inv.status === 'draft' && <div className="mb-6 rounded-md border border-dashed border-line-strong text-text-muted text-center text-[12px] py-1 no-print">Borrador — aún no tiene validez</div>}
+      <header className="flex flex-col sm:flex-row justify-between gap-6 pb-6" style={{ borderBottom: `3px solid ${accent}` }}>
+        <div className="flex gap-4">
+          {logo && <img src={logo} alt="" className="h-16 w-16 object-contain" />}
+          <div>
+            <div className="font-display text-[22px] font-semibold leading-tight">{company.trade_name || company.name}</div>
+            {company.trade_name && <div className="text-[12px] text-[#555]">{company.name}</div>}
+            <div className="text-[12px] text-[#555] mt-1 leading-relaxed">
+              {company.is_formal && company.rnc && <div>RNC: <b className="num">{company.rnc}</b></div>}
+              {company.address && <div>{company.address}</div>}
+              {[company.phone, company.email].filter(Boolean).join(' · ')}
             </div>
           </div>
-          <div className="sm:text-right shrink-0">
-            <div className="font-display text-[24px] font-extrabold uppercase tracking-[0.04em] leading-none" style={{ color: accent }}>{docTitle(inv, company, quote)}</div>
-            <div className="mt-3 inline-block text-left rounded-lg border border-[#e4e1ea] overflow-hidden">
-              {inv.ncf ? <>
-                <div className="px-3.5 py-2" style={{ background: tint }}>
-                  <div className={label} style={{ color: accent }}>NCF</div>
-                  <div className="text-[16px] font-bold tracking-wide">{inv.ncf}</div>
-                </div>
-                {inv.ncf_expires_at && <div className="px-3.5 py-1.5 text-[11px] text-[#55515f] border-t border-[#e4e1ea]">Válido hasta {dateShort(inv.ncf_expires_at)}</div>}
-              </> : (
-                <div className="px-3.5 py-2" style={{ background: tint }}>
-                  <div className={label} style={{ color: accent }}>No.</div>
-                  <div className="text-[16px] font-bold tracking-wide">{inv.number}</div>
-                </div>
-              )}
-            </div>
-            {inv.ref_ncf && <div className="text-[11px] text-[#55515f] mt-2">Modifica NCF <span className="font-semibold">{inv.ref_ncf}</span></div>}
-          </div>
-        </header>
+        </div>
+        <div className="sm:text-right">
+          <div className="font-display text-[19px] font-semibold uppercase tracking-wide" style={{ color: accent }}>{docTitle(inv, company, quote)}</div>
+          {inv.ncf ? (
+            <>
+              <div className="mt-2 text-[12px] text-[#555]">NCF</div>
+              <div className="num text-[17px] font-semibold">{inv.ncf}</div>
+              {inv.ncf_expires_at && <div className="text-[11.5px] text-[#555]">Válido hasta: {dateShort(inv.ncf_expires_at)}</div>}
+            </>
+          ) : <div className="num text-[17px] font-semibold mt-2">{inv.number}</div>}
+          {inv.ref_ncf && <div className="text-[11.5px] text-[#555] mt-1">Modifica NCF: <span className="num">{inv.ref_ncf}</span></div>}
+        </div>
+      </header>
 
-        {/* Cliente y datos del documento */}
-        <section className="mt-9 grid sm:grid-cols-[1.3fr_1fr] gap-5">
-          <div className="rounded-lg border border-[#e4e1ea] p-4">
-            <div className={label + ' text-[#8a8597] mb-1.5'}>{quote ? 'Preparada para' : 'Facturar a'}</div>
-            <div className="font-semibold text-[14.5px]">{inv.contact_name || 'Consumidor final'}</div>
-            <div className="text-[11.5px] text-[#55515f] leading-[1.6] mt-0.5">
-              {inv.contact_tax_id && <div>{inv.contact_id_type === 'cedula' ? 'Cédula' : 'RNC'} {inv.contact_tax_id}</div>}
-              {inv.contact_address && <div>{inv.contact_address}</div>}
-              {[inv.contact_phone, inv.contact_email].filter(Boolean).join('  ·  ')}
-            </div>
+      <section className="grid sm:grid-cols-[1.4fr_1fr] gap-6 py-6">
+        <div>
+          <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#777] mb-1.5">{quote ? 'Preparada para' : 'Facturar a'}</div>
+          <div className="font-semibold text-[15px]">{inv.contact_name || 'Consumidor final'}</div>
+          <div className="text-[12.5px] text-[#555] leading-relaxed">
+            {inv.contact_tax_id && <div>{inv.contact_id_type === 'cedula' ? 'Cédula' : 'RNC'}: <span className="num">{inv.contact_tax_id}</span></div>}
+            {inv.contact_address && <div>{inv.contact_address}</div>}
+            {[inv.contact_phone, inv.contact_email].filter(Boolean).join(' · ')}
           </div>
-          <dl className="rounded-lg border border-[#e4e1ea] p-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[12px] content-start">
-            <dt className="text-[#8a8597]">Fecha</dt><dd className="text-right font-medium">{dateShort(inv.date)}</dd>
-            {inv.due_date && <><dt className="text-[#8a8597]">{quote ? 'Válida hasta' : 'Vencimiento'}</dt><dd className="text-right font-medium">{dateShort(inv.due_date)}</dd></>}
-            {inv.payment_terms && <><dt className="text-[#8a8597]">Condición</dt><dd className="text-right font-medium">{inv.payment_terms}</dd></>}
-            {inv.period && <><dt className="text-[#8a8597]">Período</dt><dd className="text-right font-medium capitalize">{inv.period}</dd></>}
-            {inv.ncf && <><dt className="text-[#8a8597]">Referencia</dt><dd className="text-right font-medium">{inv.number}</dd></>}
-          </dl>
-        </section>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px] content-start">
+          <dt className="text-[#777]">Fecha</dt><dd className="num text-right">{dateShort(inv.date)}</dd>
+          {inv.due_date && <><dt className="text-[#777]">{quote ? 'Válida hasta' : 'Vence'}</dt><dd className="num text-right">{dateShort(inv.due_date)}</dd></>}
+          {inv.payment_terms && <><dt className="text-[#777]">Condición</dt><dd className="text-right">{inv.payment_terms}</dd></>}
+          {inv.period && <><dt className="text-[#777]">Período</dt><dd className="text-right capitalize">{inv.period}</dd></>}
+          {inv.ncf && <><dt className="text-[#777]">Referencia</dt><dd className="num text-right">{inv.number}</dd></>}
+        </dl>
+      </section>
 
-        {/* Detalle */}
-        <table className="w-full mt-7 text-[12px] border-collapse">
-          <thead>
-            <tr style={{ background: accent, color: '#fff' }} className={label}>
-              <th className="py-2.5 pl-3 pr-2 text-left w-8">#</th>
-              <th className="py-2.5 px-2 text-left">Descripción</th>
-              <th className="py-2.5 px-2 text-right w-14">Cant.</th>
-              <th className="py-2.5 px-2 text-right w-24">Precio</th>
-              {inv.discount > 0 && <th className="py-2.5 px-2 text-right w-20">Desc.</th>}
-              {showItbis && <th className="py-2.5 px-2 text-right w-20">ITBIS</th>}
-              <th className="py-2.5 pl-2 pr-3 text-right w-28">Importe</th>
+      <table className="w-full text-[12.5px]">
+        <thead>
+          <tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.12em] text-[#666]" style={{ borderBottom: '1.5px solid #111' }}>
+            <th className="py-2 pr-2">Descripción</th><th className="py-2 px-2 text-right">Cant.</th><th className="py-2 px-2 text-right">Precio</th>
+            <th className="py-2 px-2 text-right">Desc.</th>{showItbis && <th className="py-2 px-2 text-right">ITBIS</th>}<th className="py-2 pl-2 text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inv.items.map((it) => (
+            <tr key={it.id} className="border-b border-[#e6e6e6] align-top">
+              <td className="py-2.5 pr-2">{it.description}</td>
+              <td className="py-2.5 px-2 text-right num">{Number(it.qty)}</td>
+              <td className="py-2.5 px-2 text-right num">{money(it.price, inv.currency, { symbol: false })}</td>
+              <td className="py-2.5 px-2 text-right num">{it.discount ? money(it.discount, inv.currency, { symbol: false }) : '—'}</td>
+              {showItbis && <td className="py-2.5 px-2 text-right num">{it.itbis ? money(it.itbis, inv.currency, { symbol: false }) : 'E'}</td>}
+              <td className="py-2.5 pl-2 text-right num font-semibold">{money(it.qty * it.price - it.discount, inv.currency, { symbol: false })}</td>
             </tr>
-          </thead>
-          <tbody>
-            {inv.items.map((it, i) => (
-              <tr key={it.id} className="align-top border-b border-[#ecebf0] break-inside-avoid" style={i % 2 ? { background: '#faf9fc' } : undefined}>
-                <td className="py-2.5 pl-3 pr-2 text-[#8a8597]">{i + 1}</td>
-                <td className="py-2.5 px-2">{it.description}</td>
-                <td className="py-2.5 px-2 text-right">{Number(it.qty)}</td>
-                <td className="py-2.5 px-2 text-right">{m(it.price)}</td>
-                {inv.discount > 0 && <td className="py-2.5 px-2 text-right">{it.discount ? m(it.discount) : '—'}</td>}
-                {showItbis && <td className="py-2.5 px-2 text-right">{it.itbis ? m(it.itbis) : 'Exento'}</td>}
-                <td className="py-2.5 pl-2 pr-3 text-right font-semibold">{m(it.qty * it.price - it.discount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          ))}
+        </tbody>
+      </table>
 
-        {/* Totales y notas */}
-        <section className="mt-6 grid sm:grid-cols-[1fr_270px] gap-8 break-inside-avoid">
-          <div className="space-y-4 text-[11.5px] text-[#3d3a46]">
-            <div><span className="text-[#8a8597]">Son: </span><span className="italic">{amountInWords(inv.total, inv.currency)}</span></div>
-            {inv.notes && <div>
-              <div className={label + ' text-[#8a8597] mb-1'}>Notas</div>
-              <div className="whitespace-pre-line">{inv.notes}</div>
-            </div>}
-            {!quote && company.payment_instructions && (
-              <div className="rounded-lg p-3.5" style={{ background: tint }}>
-                <div className={label + ' mb-1'} style={{ color: accent }}>Datos para pago</div>
-                <div className="whitespace-pre-line text-[#1c1a24]">{company.payment_instructions}</div>
-              </div>
-            )}
+      <section className="grid sm:grid-cols-[1fr_280px] gap-8 mt-6">
+        <div className="text-[12px] text-[#444] space-y-3">
+          <div><span className="text-[#777]">Son: </span><i>{amountInWords(inv.total, inv.currency)}</i></div>
+          {inv.notes && <div className="whitespace-pre-line rounded-md bg-[#F6F4FA] p-3">{inv.notes}</div>}
+          {!quote && company.payment_instructions && <div>
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#777] mb-1">Datos para pago</div>
+            <div className="whitespace-pre-line">{company.payment_instructions}</div>
+          </div>}
+        </div>
+        <div className="text-[13px]">
+          <Line label="Subtotal" value={inv.subtotal} c={inv.currency} />
+          {inv.discount > 0 && <Line label="Descuento" value={-inv.discount} c={inv.currency} />}
+          {showItbis && <Line label="ITBIS" value={inv.itbis} c={inv.currency} />}
+          <div className="flex justify-between items-baseline mt-2 pt-2.5" style={{ borderTop: '1.5px solid #111' }}>
+            <span className="font-semibold">Total</span><span className="num text-[19px] font-semibold">{money(inv.total, inv.currency)}</span>
           </div>
-          <div className="text-[12.5px]">
-            <Line label="Subtotal" value={inv.subtotal} c={inv.currency} />
-            {inv.discount > 0 && <Line label="Descuento" value={-inv.discount} c={inv.currency} />}
-            {showItbis && <Line label="ITBIS" value={inv.itbis} c={inv.currency} />}
-            <div className="flex justify-between items-center mt-2 rounded-md px-3 py-2.5 text-white" style={{ background: accent }}>
-              <span className="font-semibold uppercase tracking-wider text-[11px]">Total</span>
-              <span className="text-[17px] font-bold">{money(inv.total, inv.currency)}</span>
+          {inv.itbis_retained > 0 && <Line label="ITBIS retenido" value={-inv.itbis_retained} c={inv.currency} />}
+          {inv.isr_retained > 0 && <Line label="ISR retenido" value={-inv.isr_retained} c={inv.currency} />}
+          {(inv.itbis_retained > 0 || inv.isr_retained > 0) && <Line label="Neto a pagar" value={inv.total - inv.itbis_retained - inv.isr_retained} c={inv.currency} bold />}
+          {!quote && inv.doc_type === 'invoice' && inv.paid > 0 && inv.status !== 'void' && <>
+            <Line label="Pagado" value={-inv.paid} c={inv.currency} />
+            <div className="flex justify-between items-baseline mt-1 pt-2 border-t border-[#ccc]">
+              <span className="font-semibold">{inv.status === 'paid' ? 'Saldo' : 'Balance pendiente'}</span>
+              <span className="num font-semibold">{inv.status === 'paid' ? 'PAGADA' : money(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid, inv.currency)}</span>
             </div>
-            {inv.itbis_retained > 0 && <Line label="ITBIS retenido" value={-inv.itbis_retained} c={inv.currency} />}
-            {inv.isr_retained > 0 && <Line label="ISR retenido" value={-inv.isr_retained} c={inv.currency} />}
-            {(inv.itbis_retained > 0 || inv.isr_retained > 0) && <Line label="Neto a pagar" value={net} c={inv.currency} bold />}
-            {isInvoice && inv.paid > 0 && inv.status !== 'void' && <>
-              <Line label="Pagado" value={-inv.paid} c={inv.currency} />
-              <div className="flex justify-between items-baseline mt-1 pt-2 border-t-2 border-[#1c1a24]">
-                <span className="font-semibold">Balance pendiente</span>
-                <span className="font-bold">{money(Math.max(0, balance), inv.currency)}</span>
-              </div>
-            </>}
-          </div>
-        </section>
+          </>}
+        </div>
+      </section>
 
-        {/* Pie: firmas y nota de la empresa, siempre al final de la hoja */}
-        <footer className="mt-auto pt-14 break-inside-avoid">
-          {!quote && (
-            <div className="grid grid-cols-2 gap-16 text-[11px] text-[#6b6778]">
-              <div className="pt-1.5 border-t border-[#b9b5c3] text-center">Despachado por</div>
-              <div className="pt-1.5 border-t border-[#b9b5c3] text-center">Recibido conforme</div>
-            </div>
-          )}
-          {quote && <p className="text-[11px] text-[#6b6778]">Precios en {inv.currency === 'USD' ? 'dólares' : 'pesos dominicanos'}{company.charges_itbis ? ', ITBIS incluido en el total' : ''}. Cotización sujeta a aprobación.</p>}
-          {company.invoice_footer && <p className="mt-6 text-center text-[11px] text-[#6b6778] whitespace-pre-line">{company.invoice_footer}</p>}
-          <div className="mt-6 pt-3 border-t border-[#ecebf0] flex justify-between text-[10px] text-[#a19cad]">
-            <span>{company.trade_name || company.name}{company.is_formal && company.rnc ? ` · RNC ${company.rnc}` : ''}</span>
-            <span>{inv.ncf || inv.number}</span>
-          </div>
-        </footer>
-      </div>
+      <footer className="mt-14 grid sm:grid-cols-2 gap-10 text-[11.5px] text-[#666]">
+        <div className="pt-2 border-t border-[#999] text-center">Despachado por</div>
+        <div className="pt-2 border-t border-[#999] text-center">Recibido conforme</div>
+      </footer>
+      {company.invoice_footer && <p className="mt-8 text-center text-[11px] text-[#777] whitespace-pre-line">{company.invoice_footer}</p>}
     </article>
   );
 }
@@ -328,7 +280,7 @@ function TicketSheet({ inv, company, quote }) {
 }
 
 const Line = ({ label, value, c, bold }) => (
-  <div className={cx('flex justify-between py-1', bold && 'font-semibold')}><span className="text-[#55515f]">{label}</span><span>{money(value, c)}</span></div>
+  <div className={cx('flex justify-between py-1', bold && 'font-semibold')}><span className="text-[#555]">{label}</span><span className="num">{money(value, c)}</span></div>
 );
 
 export function PaymentModal({ open, onClose, onSave, balance, title }) {
