@@ -78,7 +78,7 @@ function CompanyForm() {
 }
 
 function InvoiceSettings() {
-  const { form, set, save, error } = useCompanyForm(['invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color']);
+  const { form, set, save, error } = useCompanyForm(['invoice_prefix', 'next_invoice_no', 'quote_prefix', 'next_quote_no', 'invoice_footer', 'accent_color', 'payment_instructions']);
   return (
     <Card title="Numeración y apariencia" className="max-w-3xl">
       <div className="grid sm:grid-cols-4 gap-4">
@@ -89,8 +89,11 @@ function InvoiceSettings() {
         <Field label="Color de acento" className="sm:col-span-1">
           <div className="flex gap-2 items-center"><input type="color" value={form.accent_color} onChange={(e) => set({ accent_color: e.target.value })} className="h-10 w-12 rounded-lg border border-line" /><Input className="num" value={form.accent_color} onChange={(e) => set({ accent_color: e.target.value })} /></div>
         </Field>
-        <Field label="Pie de factura" className="sm:col-span-3" hint="Ej. cuentas bancarias, políticas de devolución, agradecimiento.">
+        <Field label="Pie de factura" className="sm:col-span-3" hint="Ej. políticas de devolución, agradecimiento.">
           <Textarea value={form.invoice_footer || ''} onChange={(e) => set({ invoice_footer: e.target.value })} />
+        </Field>
+        <Field label="Datos para pago" className="sm:col-span-4" hint="Se imprimen en facturas y estados de cuenta. Ej. Banco Popular · Cta. corriente 000-000000-0 · a nombre de Tecnossync">
+          <Textarea value={form.payment_instructions || ''} onChange={(e) => set({ payment_instructions: e.target.value })} />
         </Field>
       </div>
       <div className="mt-4"><ErrorBox error={error} /></div>

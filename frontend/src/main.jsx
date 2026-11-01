@@ -19,6 +19,8 @@ import Reports from './pages/Reports';
 import Taxes from './pages/Taxes';
 import { Budgets, BudgetEditor } from './pages/Budgets';
 import Settings from './pages/Settings';
+import Recurring from './pages/Recurring';
+import Statement from './pages/Statement';
 
 function App() {
   const { ready, session } = useAuth();
@@ -44,6 +46,10 @@ function App() {
         <Route path="cotizaciones/nueva" element={<InvoiceEditor quote />} />
         <Route path="cotizaciones/:id" element={<InvoiceView quote />} />
         <Route path="cotizaciones/:id/editar" element={<InvoiceEditor quote />} />
+        <Route path="recurrentes" element={<Recurring />} />
+        <Route path="recurrentes/nuevo" element={<InvoiceEditor recurring />} />
+        <Route path="recurrentes/:id" element={<InvoiceEditor recurring />} />
+        <Route path="clientes/:id/estado" element={<Statement />} />
         <Route path="gastos" element={<Expenses />} />
         <Route path="clientes" element={<Contacts />} />
         <Route path="productos" element={<Products />} />

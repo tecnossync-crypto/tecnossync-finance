@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, FileText, FileSignature, Receipt, Users, Package, Landmark, PieChart, BookOpen, Library,
-  BarChart3, Building2, Settings, LogOut, ChevronsUpDown, Menu, X, Plus, Check, Scale,
+  BarChart3, Building2, Settings, LogOut, ChevronsUpDown, Menu, X, Plus, Check, Scale, Repeat,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../lib/auth';
@@ -12,7 +12,7 @@ import { cx, Modal, Field, Input, Toggle, useToast } from './ui';
 
 const NAV = [
   { section: 'General', items: [['/', 'Resumen', LayoutGrid]] },
-  { section: 'Ventas', items: [['/facturas', 'Facturas', FileText], ['/cotizaciones', 'Cotizaciones', FileSignature], ['/clientes', 'Clientes y proveedores', Users], ['/productos', 'Productos y servicios', Package]] },
+  { section: 'Ventas', items: [['/facturas', 'Facturas', FileText], ['/cotizaciones', 'Cotizaciones', FileSignature], ['/recurrentes', 'Cobros recurrentes', Repeat], ['/clientes', 'Clientes y proveedores', Users], ['/productos', 'Productos y servicios', Package]] },
   { section: 'Gastos', items: [['/gastos', 'Gastos y compras', Receipt], ['/presupuestos', 'Presupuestos', PieChart]] },
   { section: 'Tesorería', items: [['/bancos', 'Bancos y caja', Landmark]] },
   { section: 'Contabilidad', items: [['/contabilidad/asientos', 'Diario general', BookOpen], ['/contabilidad/catalogo', 'Catálogo de cuentas', Library], ['/reportes', 'Estados financieros', BarChart3], ['/impuestos', 'Impuestos DGII', Scale, 'formal']] },

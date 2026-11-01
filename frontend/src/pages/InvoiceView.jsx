@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus } from 'lucide-react';
+import { ArrowLeft, Printer, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus, Repeat, ScrollText } from 'lucide-react';
 import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, date, dateShort, today, amountInWords } from '../lib/format';
@@ -12,7 +12,7 @@ export default function InvoiceView({ quote }) {
   const navigate = useNavigate();
   const toast = useToast();
   const { company, can } = useAuth();
-  const { data: inv, loading, reload } = useData(() => api.get(`/invoices/${id}`), [id]);
+  const { data: inv, loading, reload, error } = useData(() => api.get(`/invoices/${id}`), [id]);
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [format, setFormat] = useState('letter');
@@ -26,6 +26,7 @@ export default function InvoiceView({ quote }) {
     return () => url && URL.revokeObjectURL(url);
   }, [company.has_logo]);
 
+  if (error) return <div className="max-w-md"><ErrorBox error={error} /></div>;
   if (loading || !inv) return <Loading />;
   const receivable = inv.total - inv.itbis_retained - inv.isr_retained;
   const balance = receivable - inv.paid;
@@ -59,6 +60,12 @@ export default function InvoiceView({ quote }) {
           {!quote && inv.doc_type === 'invoice' && ['issued', 'partial', 'paid'].includes(inv.status) && company.is_formal && can('accountant') && (
             <Link to={`/facturas/${id}/nota-credito`} className="btn-outline"><FileMinus size={15} /> Nota de crédito</Link>
           )}
+          {!quote && inv.doc_type === 'invoice' && inv.contact_id && can('operator') && (
+            inv.recurring_id
+              ? <Link to={`/recurrentes/${inv.recurring_id}`} className="btn-outline"><Repeat size={15} /> Ver cobro recurrente</Link>
+              : <Link to={`/recurrentes/nuevo?desde=${id}`} className="btn-outline"><Repeat size={15} /> Hacer recurrente</Link>
+          )}
+          {!quote && inv.contact_id && <Link to={`/clientes/${inv.contact_id}/estado`} className="btn-ghost" title="Estado de cuenta del cliente"><ScrollText size={15} /></Link>}
           {!quote && !['void', 'draft'].includes(inv.status) && can('accountant') && (
             <button className="btn-danger" onClick={() => setVoiding(true)}><Ban size={15} /> Anular</button>
           )}
@@ -162,6 +169,7 @@ function LetterSheet({ inv, company, logo, quote }) {
           <dt className="text-[#777]">Fecha</dt><dd className="num text-right">{dateShort(inv.date)}</dd>
           {inv.due_date && <><dt className="text-[#777]">{quote ? 'Válida hasta' : 'Vence'}</dt><dd className="num text-right">{dateShort(inv.due_date)}</dd></>}
           {inv.payment_terms && <><dt className="text-[#777]">Condición</dt><dd className="text-right">{inv.payment_terms}</dd></>}
+          {inv.period && <><dt className="text-[#777]">Período</dt><dd className="text-right capitalize">{inv.period}</dd></>}
           {inv.ncf && <><dt className="text-[#777]">Referencia</dt><dd className="num text-right">{inv.number}</dd></>}
         </dl>
       </section>
@@ -190,7 +198,11 @@ function LetterSheet({ inv, company, logo, quote }) {
       <section className="grid sm:grid-cols-[1fr_280px] gap-8 mt-6">
         <div className="text-[12px] text-[#444] space-y-3">
           <div><span className="text-[#777]">Son: </span><i>{amountInWords(inv.total, inv.currency)}</i></div>
-          {inv.notes && <div className="whitespace-pre-line rounded-md bg-[#f6f7f3] p-3">{inv.notes}</div>}
+          {inv.notes && <div className="whitespace-pre-line rounded-md bg-[#F6F4FA] p-3">{inv.notes}</div>}
+          {!quote && company.payment_instructions && <div>
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-[#777] mb-1">Datos para pago</div>
+            <div className="whitespace-pre-line">{company.payment_instructions}</div>
+          </div>}
         </div>
         <div className="text-[13px]">
           <Line label="Subtotal" value={inv.subtotal} c={inv.currency} />
@@ -202,6 +214,13 @@ function LetterSheet({ inv, company, logo, quote }) {
           {inv.itbis_retained > 0 && <Line label="ITBIS retenido" value={-inv.itbis_retained} c={inv.currency} />}
           {inv.isr_retained > 0 && <Line label="ISR retenido" value={-inv.isr_retained} c={inv.currency} />}
           {(inv.itbis_retained > 0 || inv.isr_retained > 0) && <Line label="Neto a pagar" value={inv.total - inv.itbis_retained - inv.isr_retained} c={inv.currency} bold />}
+          {!quote && inv.doc_type === 'invoice' && inv.paid > 0 && inv.status !== 'void' && <>
+            <Line label="Pagado" value={-inv.paid} c={inv.currency} />
+            <div className="flex justify-between items-baseline mt-1 pt-2 border-t border-[#ccc]">
+              <span className="font-semibold">{inv.status === 'paid' ? 'Saldo' : 'Balance pendiente'}</span>
+              <span className="num font-semibold">{inv.status === 'paid' ? 'PAGADA' : money(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid, inv.currency)}</span>
+            </div>
+          </>}
         </div>
       </section>
 
@@ -217,6 +236,7 @@ function LetterSheet({ inv, company, logo, quote }) {
 function TicketSheet({ inv, company, quote }) {
   return (
     <article className="print-sheet print-ticket card bg-white p-5 w-[302px] font-mono text-[11.5px] text-black leading-snug">
+      <style>{'@media print { @page { size: 80mm auto; margin: 3mm; } }'}</style>
       <div className="text-center">
         <div className="font-bold text-[13px]">{company.trade_name || company.name}</div>
         {company.is_formal && company.rnc && <div>RNC {company.rnc}</div>}
@@ -241,6 +261,10 @@ function TicketSheet({ inv, company, quote }) {
       <div className="flex justify-between"><span>Subtotal</span><span>{money(inv.subtotal - inv.discount, 'DOP', { symbol: false })}</span></div>
       {company.charges_itbis && <div className="flex justify-between"><span>ITBIS</span><span>{money(inv.itbis, 'DOP', { symbol: false })}</span></div>}
       <div className="flex justify-between font-bold text-[13px] mt-1"><span>TOTAL</span><span>{money(inv.total)}</span></div>
+      {inv.doc_type === 'invoice' && inv.paid > 0 && inv.status !== 'void' && <>
+        <div className="flex justify-between"><span>Pagado</span><span>{money(inv.paid, 'DOP', { symbol: false })}</span></div>
+        <div className="flex justify-between font-bold"><span>Pendiente</span><span>{money(inv.total - inv.itbis_retained - inv.isr_retained - inv.paid, 'DOP', { symbol: false })}</span></div>
+      </>}
       <div className="border-t border-dashed border-black my-2" />
       <div className="text-center">{company.invoice_footer || '¡Gracias por su compra!'}</div>
     </article>

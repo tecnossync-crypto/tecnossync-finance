@@ -23,6 +23,8 @@ const api = express.Router();
 api.use(requireAuth);
 api.use('/company', require('./routes/company'));
 api.use('/', require('./routes/catalog'));
+api.use('/contacts', require('./routes/statements'));
+api.use('/recurring', require('./routes/recurring'));
 api.use('/invoices', require('./routes/invoices'));
 api.use('/expenses', require('./routes/expenses'));
 api.use('/banks', require('./routes/banks'));
@@ -39,5 +41,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4100;
 migrate()
-  .then(() => app.listen(PORT, () => console.log(`Tecnossync Ledger API en :${PORT}`)))
+  .then(() => app.listen(PORT, () => {
+    console.log(`Tecnossync Ledger API en :${PORT}`);
+    if (process.env.RECURRING !== 'off') require('./lib/recurring').startScheduler();
+  }))
   .catch((e) => { console.error('No se pudo migrar la base de datos', e); process.exit(1); });

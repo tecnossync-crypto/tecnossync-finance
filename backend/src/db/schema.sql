@@ -241,3 +241,36 @@ CREATE TABLE IF NOT EXISTS budget_lines (
   amount     NUMERIC(14,2) NOT NULL DEFAULT 0,
   UNIQUE (budget_id, account_id, month)
 );
+
+-- Datos para pago (cuentas bancarias, etc.) impresos en facturas y estados de cuenta
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS payment_instructions TEXT;
+
+-- Cobros recurrentes: plantillas que generan una factura cada N meses
+CREATE TABLE IF NOT EXISTS recurring_invoices (
+  id            SERIAL PRIMARY KEY,
+  company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  contact_id    INTEGER NOT NULL REFERENCES contacts(id),
+  name          TEXT NOT NULL,
+  every_months  INTEGER NOT NULL DEFAULT 1 CHECK (every_months IN (1,2,3,6,12)),
+  day_of_month  INTEGER NOT NULL DEFAULT 1 CHECK (day_of_month BETWEEN 1 AND 31),
+  next_date     DATE NOT NULL,
+  end_date      DATE,
+  due_days      INTEGER NOT NULL DEFAULT 15,
+  auto_issue    BOOLEAN NOT NULL DEFAULT true,     -- false = deja la factura en borrador para revisarla
+  period_label  BOOLEAN NOT NULL DEFAULT true,     -- agrega "— noviembre 2026" a cada línea
+  ncf_type      TEXT,
+  income_type   TEXT NOT NULL DEFAULT '01',
+  payment_terms TEXT,
+  itbis_retention_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+  isr_retention_pct   NUMERIC(5,2) NOT NULL DEFAULT 0,
+  notes         TEXT,
+  items         JSONB NOT NULL DEFAULT '[]',
+  active        BOOLEAN NOT NULL DEFAULT true,
+  last_run_at   TIMESTAMPTZ,
+  last_error    TEXT,
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS rec_due ON recurring_invoices(next_date) WHERE active;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_id INTEGER REFERENCES recurring_invoices(id) ON DELETE SET NULL;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS period TEXT;

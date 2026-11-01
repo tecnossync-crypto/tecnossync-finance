@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Users, Pencil } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Users, Pencil, ScrollText } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Empty, ErrorBox, Field, Input, Loading, Modal, Money, PageHeader, Select, Tabs, Textarea, useData, useToast, Badge } from '../components/ui';
@@ -75,7 +76,10 @@ export default function Contacts() {
                     <td className="text-[12.5px] text-text-muted">{[c.phone, c.email].filter(Boolean).join(' · ') || '—'}</td>
                     <td className="r">{c.receivable > 0 ? <Money value={c.receivable} className="font-semibold" /> : <span className="text-text-faint">—</span>}</td>
                     <td className="r">{c.payable > 0 ? <Money value={c.payable} className="font-semibold text-danger" /> : <span className="text-text-faint">—</span>}</td>
-                    <td className="r w-12">{can('operator') && <button className="btn-ghost btn-sm" onClick={() => setEditing(c)}><Pencil size={14} /></button>}</td>
+                    <td className="r w-44 whitespace-nowrap">
+                      <Link to={`/clientes/${c.id}/estado`} className="btn-ghost btn-sm" title="Estado de cuenta"><ScrollText size={14} /> Estado de cuenta</Link>
+                      {can('operator') && <button className="btn-ghost btn-sm" onClick={() => setEditing(c)}><Pencil size={14} /></button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

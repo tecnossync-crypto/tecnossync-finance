@@ -1,33 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, UserPlus, Send } from 'lucide-react';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
+import { Plus, Trash2, ArrowLeft, UserPlus, Send, Repeat } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, today, addDays, round2 } from '../lib/format';
-import { NCF_TYPES, NCF_CREDIT_NOTE, INCOME_TYPES } from '../lib/constants';
-import { Card, Field, Input, Select, Textarea, Loading, ErrorBox, useToast, cx } from '../components/ui';
+import { NCF_TYPES, NCF_CREDIT_NOTE, INCOME_TYPES, FREQUENCIES, INVOICE_STATUS } from '../lib/constants';
+import { Card, Field, Input, Select, Textarea, Toggle, Loading, ErrorBox, useToast, cx, StatusBadge, Money } from '../components/ui';
 import { ContactModal } from './Contacts';
 
 const blankLine = () => ({ key: Math.random(), product_id: '', description: '', qty: 1, price: '', discount: '', itbis_rate: null, kind: 'service' });
 
-export default function InvoiceEditor({ quote }) {
+// Editor de facturas, cotizaciones, notas de crédito y plantillas de cobro recurrente (recurring)
+export default function InvoiceEditor({ quote, recurring }) {
   const { id } = useParams();
+  const [params] = useSearchParams();
+  const fromInvoice = recurring && params.get('desde');
   const { pathname } = useLocation();
   const creditNote = pathname.endsWith('/nota-credito');
   const navigate = useNavigate();
   const toast = useToast();
   const { company } = useAuth();
-  const base = quote ? '/cotizaciones' : '/facturas';
+  const base = recurring ? '/recurrentes' : quote ? '/cotizaciones' : '/facturas';
+  const [history, setHistory] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [products, setProducts] = useState([]);
   const [newContact, setNewContact] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState(!id);
+  const [ready, setReady] = useState(!id && !fromInvoice);
   const [terms, setTerms] = useState(30);
   const [form, setForm] = useState({
     contact_id: '', date: today(), due_date: addDays(today(), 30), ncf_type: company.is_formal ? 'B02' : '',
     income_type: '01', itbis_retention_pct: 0, isr_retention_pct: 0, notes: '', payment_terms: '', items: [blankLine()],
+    ...(recurring && { name: '', every_months: 1, next_date: today(), end_date: '', due_days: 15, auto_issue: true, period_label: true, payment_terms: 'Crédito 15 días' }),
   });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const defaultRate = company.charges_itbis ? Number(company.itbis_rate) : 0;
@@ -38,8 +43,19 @@ export default function InvoiceEditor({ quote }) {
   }, []);
 
   useEffect(() => {
-    if (!id) return;
-    api.get(`/invoices/${id}`).then((inv) => {
+    if (!recurring || !id) return;
+    api.get(`/recurring/${id}`).then((r) => {
+      setForm({ ...r, end_date: r.end_date || '', ncf_type: r.ncf_type || '', notes: r.notes || '', payment_terms: r.payment_terms || '',
+        items: r.items.map((it) => ({ ...it, key: Math.random() })) });
+      setHistory(r.invoices);
+      setReady(true);
+    });
+  }, [recurring, id]);
+
+  useEffect(() => {
+    const src = recurring ? fromInvoice : id;
+    if (!src || (recurring && id)) return;
+    api.get(`/invoices/${src}`).then((inv) => {
       const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
       setForm({
         contact_id: inv.contact_id || '', date: creditNote ? today() : inv.date, due_date: inv.due_date || '',
@@ -47,10 +63,14 @@ export default function InvoiceEditor({ quote }) {
         payment_terms: inv.payment_terms || '',
         itbis_retention_pct: pct(inv.itbis_retained, inv.itbis), isr_retention_pct: pct(inv.isr_retained, inv.subtotal - inv.discount),
         items: inv.items.map((it) => ({ ...it, key: it.id })),
+        ...(recurring && {
+          name: `${inv.items[0]?.description || 'Servicio'} — ${inv.contact_name || 'cliente'}`, every_months: 1, next_date: addDays(inv.date, 30),
+          end_date: '', due_days: 15, auto_issue: true, period_label: true, notes: inv.notes || '', payment_terms: inv.payment_terms || 'Crédito 15 días',
+        }),
       });
       setReady(true);
     });
-  }, [id, creditNote]);
+  }, [id, creditNote, recurring, fromInvoice]);
 
   const ncfOptions = creditNote ? NCF_CREDIT_NOTE : NCF_TYPES;
   const contact = contacts.find((c) => String(c.id) === String(form.contact_id));
@@ -78,6 +98,15 @@ export default function InvoiceEditor({ quote }) {
 
   const save = async (issue) => {
     setBusy(true); setError(null);
+    if (recurring) {
+      try {
+        const body = { ...form, items: form.items.map((l) => ({ ...l, itbis_rate: l.itbis_rate ?? defaultRate })) };
+        const r = id ? await api.put(`/recurring/${id}`, body) : await api.post('/recurring', body);
+        toast(id ? 'Cobro recurrente actualizado' : 'Cobro recurrente creado');
+        navigate(id ? base : `${base}/${r.id}`, { replace: true });
+      } catch (e) { setError(e); } finally { setBusy(false); }
+      return;
+    }
     try {
       const body = { ...form, issue, doc_type: quote ? 'quote' : creditNote ? 'credit_note' : 'invoice', ref_invoice_id: creditNote ? Number(id) : undefined,
         items: form.items.map((l) => ({ ...l, itbis_rate: l.itbis_rate ?? defaultRate })) };
@@ -88,19 +117,23 @@ export default function InvoiceEditor({ quote }) {
   };
 
   if (!ready) return <Loading />;
-  const title = quote ? (id ? 'Editar cotización' : 'Nueva cotización') : creditNote ? 'Nota de crédito' : id ? 'Editar factura' : 'Nueva factura';
+  const title = recurring ? (id ? 'Editar cobro recurrente' : 'Nuevo cobro recurrente') : quote ? (id ? 'Editar cotización' : 'Nueva cotización') : creditNote ? 'Nota de crédito' : id ? 'Editar factura' : 'Nueva factura';
 
   return (
     <>
       <button onClick={() => navigate(-1)} className="btn-ghost btn-sm -ml-3 mb-3"><ArrowLeft size={15} /> Volver</button>
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <div className="eyebrow mb-2">{company.is_formal ? 'Comprobante fiscal' : 'Documento interno'}</div>
+          <div className="eyebrow mb-2">{recurring ? 'Se factura solo cada período' : company.is_formal ? 'Comprobante fiscal' : 'Documento interno'}</div>
           <h1 className="text-[30px] font-semibold leading-none">{title}</h1>
         </div>
         <div className="flex gap-2">
-          <button className="btn-outline" disabled={busy} onClick={() => save(false)}>Guardar borrador</button>
-          <button className="btn-primary" disabled={busy} onClick={() => save(true)}><Send size={15} /> {quote ? 'Guardar y enviar' : 'Emitir'}</button>
+          {recurring ? (
+            <button className="btn-primary" disabled={busy} onClick={() => save(true)}><Repeat size={15} /> Guardar cobro</button>
+          ) : <>
+            <button className="btn-outline" disabled={busy} onClick={() => save(false)}>Guardar borrador</button>
+            <button className="btn-primary" disabled={busy} onClick={() => save(true)}><Send size={15} /> {quote ? 'Guardar y enviar' : 'Emitir'}</button>
+          </>}
         </div>
       </div>
 
@@ -108,15 +141,19 @@ export default function InvoiceEditor({ quote }) {
         <div className="space-y-4">
           <Card>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-5">
+              {recurring && <Field label="Nombre del cobro" className="sm:col-span-2 lg:col-span-4" hint="Para identificarlo, p. ej. «Mantenimiento web — Clínica Abreu»">
+                <Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Mantenimiento mensual" />
+              </Field>}
               <Field label="Cliente" className="sm:col-span-2">
                 <div className="flex gap-2">
                   <Select value={form.contact_id} onChange={(e) => set({ contact_id: e.target.value })}>
-                    <option value="">Consumidor final</option>
+                    <option value="">{recurring ? '— Elige el cliente —' : 'Consumidor final'}</option>
                     {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.tax_id ? ` · ${c.tax_id}` : ''}</option>)}
                   </Select>
                   <button type="button" onClick={() => setNewContact(true)} className="btn-outline px-3" title="Nuevo cliente"><UserPlus size={16} /></button>
                 </div>
               </Field>
+              {recurring ? <RecurringFields form={form} set={set} /> : <>
               <Field label="Fecha"><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value, due_date: addDays(e.target.value, terms) })} /></Field>
               {quote ? (
                 <Field label="Válida hasta"><Input type="date" value={form.due_date} onChange={(e) => set({ due_date: e.target.value })} /></Field>
@@ -128,6 +165,7 @@ export default function InvoiceEditor({ quote }) {
                   </Select>
                 </Field>
               )}
+              </>}
               {company.is_formal && !quote && (
                 <>
                   <Field label="Tipo de comprobante" className="sm:col-span-2">
@@ -197,7 +235,7 @@ export default function InvoiceEditor({ quote }) {
           </Card>
 
           <Card>
-            <div className="pt-5"><Field label="Notas / condiciones (se imprimen en el documento)"><Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Ej. Cuenta para transferencias: Banco Popular 000-000000-0" /></Field></div>
+            <div className="pt-5"><Field label={recurring ? 'Notas (se imprimen en cada factura)' : 'Notas / condiciones (se imprimen en el documento)'}><Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Ej. Condiciones del servicio o garantía" /></Field></div>
           </Card>
         </div>
 
@@ -208,7 +246,7 @@ export default function InvoiceEditor({ quote }) {
             {totals.discount > 0 && <Row label="Descuentos" value={-totals.discount} />}
             {company.charges_itbis && <Row label="ITBIS" value={totals.itbis} />}
             <div className="flex items-end justify-between pt-4 mt-3 border-t border-ink-line">
-              <span className="text-white/60 text-[13px]">Total</span>
+              <span className="text-white/60 text-[13px]">{recurring ? 'Total por cobro' : 'Total'}</span>
               <span className="num text-[28px] font-semibold text-lime leading-none">{money(totals.total)}</span>
             </div>
             {(totals.itbisRet > 0 || totals.isrRet > 0) && (
@@ -237,6 +275,19 @@ export default function InvoiceEditor({ quote }) {
             </Card>
           )}
           <ErrorBox error={error} />
+          {recurring && history.length > 0 && (
+            <Card title="Facturas generadas" eyebrow={`${history.length} en total`} pad={false}>
+              <table className="ledger"><tbody>
+                {history.map((i) => (
+                  <tr key={i.id} className="row-link" onClick={() => navigate(`/facturas/${i.id}`)}>
+                    <td><div className="num text-[12.5px] font-semibold">{i.ncf || i.number}</div><div className="text-[11.5px] text-text-faint">{i.period}</div></td>
+                    <td><StatusBadge map={INVOICE_STATUS} status={i.status} /></td>
+                    <td className="r"><Money value={i.total} /></td>
+                  </tr>
+                ))}
+              </tbody></table>
+            </Card>
+          )}
         </aside>
       </div>
 
@@ -251,5 +302,39 @@ function Row({ label, value, strong }) {
     <div className={cx('flex justify-between py-1 text-[13.5px]', strong ? 'font-semibold text-white' : 'text-white/75')}>
       <span>{label}</span><span className="num">{money(value)}</span>
     </div>
+  );
+}
+
+// Calendario del cobro recurrente: frecuencia, próxima fecha, vencimiento y fin
+function RecurringFields({ form, set }) {
+  const [dates, setDates] = useState([]);
+  useEffect(() => {
+    if (!form.next_date) return;
+    api.get(`/recurring/preview/dates?next_date=${form.next_date}&every_months=${form.every_months}&day_of_month=${form.day_of_month || ''}`).then(setDates).catch(() => {});
+  }, [form.next_date, form.every_months, form.day_of_month]);
+  return (
+    <>
+      <Field label="Frecuencia">
+        <Select value={form.every_months} onChange={(e) => set({ every_months: Number(e.target.value) })}>
+          {FREQUENCIES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+        </Select>
+      </Field>
+      <Field label="Próximo cobro"><Input type="date" value={form.next_date} onChange={(e) => set({ next_date: e.target.value, day_of_month: Number(e.target.value.slice(8, 10)) })} /></Field>
+      <Field label="Vence a los">
+        <Select value={form.due_days} onChange={(e) => { const d = Number(e.target.value); set({ due_days: d, payment_terms: d ? `Crédito ${d} días` : 'Contado' }); }}>
+          {[0, 5, 10, 15, 30, 45].map((d) => <option key={d} value={d}>{d ? `${d} días` : 'Al emitir (contado)'}</option>)}
+        </Select>
+      </Field>
+      <Field label="Termina (opcional)" hint="Vacío = hasta que lo pauses"><Input type="date" value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} /></Field>
+      <div className="sm:col-span-2 lg:col-span-4 grid sm:grid-cols-2 gap-3 pt-1">
+        <Toggle checked={form.auto_issue} onChange={(v) => set({ auto_issue: v })} label="Emitir automáticamente" hint="Si lo apagas, la factura se crea en borrador para revisarla" />
+        <Toggle checked={form.period_label} onChange={(v) => set({ period_label: v })} label="Agregar el período a cada línea" hint="Ej. «Mantenimiento mensual — noviembre 2026»" />
+      </div>
+      {dates.length > 0 && (
+        <div className="sm:col-span-2 lg:col-span-4 rounded-lg bg-paper px-3 py-2.5 text-[12.5px] text-text-muted">
+          Próximos cobros: {dates.map((d) => <span key={d} className="num text-text font-medium mr-3">{d.split('-').reverse().join('/')}</span>)}
+        </div>
+      )}
+    </>
   );
 }

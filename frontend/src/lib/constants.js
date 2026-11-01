@@ -59,3 +59,5 @@ export const INVOICE_STATUS = {
 };
 export const QUOTE_STATUS = { ...INVOICE_STATUS, issued: ['Enviada', 'info'] };
 export const EXPENSE_STATUS = { pending: ['Por pagar', 'warn'], partial: ['Abono parcial', 'info'], paid: ['Pagado', 'ok'], void: ['Anulado', 'danger'] };
+
+export const FREQUENCIES = [[1, 'Mensual'], [2, 'Bimestral'], [3, 'Trimestral'], [6, 'Semestral'], [12, 'Anual']];

@@ -110,35 +110,41 @@ router.get('/:id', async (req, res) => {
   res.json(await loadInvoice({ query }, req.cid, req.params.id));
 });
 
-router.post('/', allow('operator'), async (req, res) => {
-  const b = req.body;
+// Crea el documento (borrador). ctx = { cid, company, user } — el req, o el de un cobro recurrente.
+async function createInvoice(client, ctx, b, extra = {}) {
   const docType = ['quote', 'credit_note'].includes(b.doc_type) ? b.doc_type : 'invoice';
-  const t = computeTotals(req.company, b.items, b);
+  const t = computeTotals(ctx.company, b.items, b);
   if (b.contact_id) {
-    const { rows } = await query('SELECT 1 FROM contacts WHERE id=$1 AND company_id=$2', [b.contact_id, req.cid]);
+    const { rows } = await client.query('SELECT 1 FROM contacts WHERE id=$1 AND company_id=$2', [b.contact_id, ctx.cid]);
     if (!rows[0]) throw new AppError(400, 'Cliente inválido');
   }
-  if (req.company.is_formal && docType !== 'quote' && ['B01', 'B14', 'B15', 'E31', 'E44', 'E45'].includes(b.ncf_type) && !b.contact_id) {
+  if (ctx.company.is_formal && docType !== 'quote' && ['B01', 'B14', 'B15', 'E31', 'E44', 'E45'].includes(b.ncf_type) && !b.contact_id) {
     throw new AppError(400, 'Este tipo de comprobante requiere un cliente con RNC');
   }
-  const id = await tx(async (client) => {
-    const number = await nextNumber(client, req.cid, docType === 'quote' ? 'quote' : 'invoice');
-    const { rows: [inv] } = await client.query(
-      `INSERT INTO invoices (company_id, doc_type, number, ncf_type, contact_id, date, due_date, currency, income_type, payment_terms,
-          subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, created_by, ref_invoice_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
-      [req.cid, docType, number, req.company.is_formal ? (b.ncf_type || null) : null, b.contact_id || null, b.date || today(),
-        b.due_date || null, b.currency || req.company.currency, b.income_type || '01', b.payment_terms || null,
-        t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null, req.user.id, b.ref_invoice_id || null]
+  const number = await nextNumber(client, ctx.cid, docType === 'quote' ? 'quote' : 'invoice');
+  const { rows: [inv] } = await client.query(
+    `INSERT INTO invoices (company_id, doc_type, number, ncf_type, contact_id, date, due_date, currency, income_type, payment_terms,
+        subtotal, discount, itbis, itbis_retained, isr_retained, total, notes, created_by, ref_invoice_id, recurring_id, period)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+    [ctx.cid, docType, number, ctx.company.is_formal ? (b.ncf_type || null) : null, b.contact_id || null, b.date || today(),
+      b.due_date || null, b.currency || ctx.company.currency, b.income_type || '01', b.payment_terms || null,
+      t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null, ctx.user.id, b.ref_invoice_id || null,
+      extra.recurring_id || null, extra.period || null]
+  );
+  for (const l of t.lines) {
+    await client.query(
+      `INSERT INTO invoice_items (company_id, invoice_id, product_id, description, qty, price, discount, itbis_rate, itbis, total, kind)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [ctx.cid, inv.id, l.product_id, l.description, l.qty, l.price, l.discount, l.itbis_rate, l.itbis, l.total, l.kind]
     );
-    for (const l of t.lines) {
-      await client.query(
-        `INSERT INTO invoice_items (company_id, invoice_id, product_id, description, qty, price, discount, itbis_rate, itbis, total, kind)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [req.cid, inv.id, l.product_id, l.description, l.qty, l.price, l.discount, l.itbis_rate, l.itbis, l.total, l.kind]
-      );
-    }
-    if (b.issue) await issue(client, req, inv);
+  }
+  return inv;
+}
+
+router.post('/', allow('operator'), async (req, res) => {
+  const id = await tx(async (client) => {
+    const inv = await createInvoice(client, req, req.body);
+    if (req.body.issue) await issue(client, req, inv);
     return inv.id;
   });
   res.json(await loadInvoice({ query }, req.cid, id));
@@ -265,3 +271,6 @@ router.delete('/:id', allow('operator'), async (req, res) => {
 });
 
 module.exports = router;
+module.exports.createInvoice = createInvoice;
+module.exports.issue = issue;
+module.exports.computeTotals = computeTotals;
