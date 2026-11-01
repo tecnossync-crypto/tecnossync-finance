@@ -21,6 +21,7 @@ import { Budgets, BudgetEditor } from './pages/Budgets';
 import Settings from './pages/Settings';
 import Recurring from './pages/Recurring';
 import Statement from './pages/Statement';
+import Forecast from './pages/Forecast';
 
 function App() {
   const { ready, session } = useAuth();
@@ -61,6 +62,7 @@ function App() {
         <Route path="contabilidad/mayor/:id" element={<Ledger />} />
         <Route path="reportes" element={<Reports />} />
         <Route path="impuestos" element={<Taxes />} />
+        <Route path="proyeccion" element={<Forecast />} />
         <Route path="ajustes" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

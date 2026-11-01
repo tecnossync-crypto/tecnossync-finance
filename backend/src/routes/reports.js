@@ -253,4 +253,10 @@ function sendTxt(req, res, header, records, filename, preview) {
   res.json({ header, count: records.length, rows: preview, filename });
 }
 
+// Proyección de ingresos/gastos (ver lib/forecast.js)
+router.get('/forecast', async (req, res) => {
+  const horizon = [3, 6, 12].includes(Number(req.query.months)) ? Number(req.query.months) : 6;
+  res.json(await require('../lib/forecast').forecast(req.cid, horizon));
+});
+
 module.exports = router;
