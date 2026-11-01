@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, Wallet, Ban, Pencil, Copy, Trash2, Check, X, FileMinus, Repeat, ScrollText } from 'lucide-react';
 import { api, fetchBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { money, date, dateShort, today, amountInWords, round2 } from '../lib/format';
+import { money, date, dateShort, today, amountInWords, round2, invoiceAmounts } from '../lib/format';
 import { INVOICE_STATUS, QUOTE_STATUS, NCF_TITLE, PAY_METHODS } from '../lib/constants';
 import { Field, Input, Loading, Modal, Select, StatusBadge, useData, useToast, ErrorBox, Tabs, Money, cx } from '../components/ui';
 
@@ -88,14 +88,30 @@ export default function InvoiceView({ quote }) {
           <div className="card p-5">
             <div className="flex items-center justify-between"><span className="eyebrow">Estado</span><StatusBadge map={quote ? QUOTE_STATUS : INVOICE_STATUS} status={inv.status} /></div>
             {!quote && inv.doc_type === 'invoice' && <>
-              <div className="mt-4 space-y-1.5 text-[13.5px]">
-                <div className="flex justify-between"><span className="text-text-muted">A cobrar</span><Money value={receivable} /></div>
-                <div className="flex justify-between"><span className="text-text-muted">Cobrado</span><Money value={inv.paid} /></div>
-              </div>
-              <div className="flex justify-between items-end mt-3 pt-3 border-t border-line">
-                <span className="font-semibold">Pendiente</span>
-                <Money value={inv.status === 'void' ? 0 : balance} className="text-[20px] font-semibold" />
-              </div>
+              {(() => {
+                const a = invoiceAmounts(inv);
+                const R = ({ l, v, cls, hint }) => <div className="flex justify-between gap-3"><span className="text-text-muted">{l}{hint && <span className="text-text-faint text-[11.5px]"> {hint}</span>}</span><Money value={v} className={cls} /></div>;
+                return <>
+                  <div className="mt-4 space-y-1.5 text-[13.5px]">
+                    <R l="Bruto (facturado)" v={inv.total} />
+                    {a.retained > 0 && <R l="Retenciones en factura" v={-a.retained} />}
+                    {a.fees > 0 && <R l="Comisión / retención cobrada" v={-a.fees} />}
+                    {a.expectedFee > 0 && <R l="Descuento estimado" hint={`(${a.pct}% de lo pendiente)`} v={-a.expectedFee} />}
+                    <div className="flex justify-between pt-1.5 border-t border-line font-semibold"><span>Neto para ti</span><Money value={a.net} className="text-brand" /></div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-line space-y-1.5 text-[13.5px]">
+                    <R l="Recibido en banco" v={a.received} />
+                    <div className="flex justify-between items-end">
+                      <span className="font-semibold">Pendiente</span>
+                      <Money value={a.balance} className="text-[20px] font-semibold" />
+                    </div>
+                    {a.expectedFee > 0 && <div className="text-right text-[12px] text-text-muted">te llegarían ~{money(a.netPending)}</div>}
+                  </div>
+                  {['issued', 'partial'].includes(inv.status) && can('operator') && (
+                    <button className="btn-brand w-full mt-4" onClick={() => setPaying(true)}><Wallet size={15} /> Registrar cobro</button>
+                  )}
+                </>;
+              })()}
             </>}
           </div>
           {inv.payments?.length > 0 && (

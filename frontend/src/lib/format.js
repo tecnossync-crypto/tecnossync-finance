@@ -68,3 +68,21 @@ export function amountInWords(n, currency = 'DOP') {
   const w = words(int);
   return `${w.charAt(0).toUpperCase() + w.slice(1)} ${name} con ${String(cents).padStart(2, '0')}/100`;
 }
+
+// Bruto y neto de una factura. Bruto = lo facturado; neto = lo que realmente te queda después de
+// retenciones y del descuento al cobrar (comisión/retención): real en lo cobrado, estimado (% del
+// cliente) en lo pendiente.
+export function invoiceAmounts(i) {
+  const live = !['void', 'draft'].includes(i.status);
+  const receivable = live ? round2(i.total - i.itbis_retained - i.isr_retained) : 0;
+  const balance = ['issued', 'partial'].includes(i.status) ? round2(receivable - i.paid) : 0;
+  const pct = Number(i.fee_pct ?? i.contact_fee_pct ?? 0);
+  const fees = live ? Number(i.fees ?? (i.payments || []).reduce((s, p) => s + Number(p.fee || 0), 0)) : 0;
+  const received = live ? Number(i.received ?? (i.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)) : 0;
+  const expectedFee = round2(balance * pct / 100);
+  const discount = round2(fees + expectedFee);
+  return {
+    gross: live ? Number(i.total) : 0, retained: live ? round2(i.itbis_retained + i.isr_retained) : 0, receivable, balance,
+    fees, expectedFee, discount, net: round2(receivable - discount), received, netPending: round2(balance - expectedFee), pct,
+  };
+}

@@ -101,8 +101,10 @@ router.get('/', async (req, res) => {
   if (q) { vals.push(`%${q}%`); where += ` AND (i.number ILIKE $${vals.length} OR i.ncf ILIKE $${vals.length} OR c.name ILIKE $${vals.length})`; }
   const { rows } = await query(
     `SELECT i.id, i.number, i.ncf, i.ncf_type, i.date, i.due_date, i.total, i.paid, i.status, i.itbis, i.doc_type,
-            i.itbis_retained, i.isr_retained, c.name AS contact_name
-       FROM invoices i LEFT JOIN contacts c ON c.id=i.contact_id WHERE ${where} ORDER BY i.date DESC, i.id DESC LIMIT 500`, vals
+            i.itbis_retained, i.isr_retained, c.name AS contact_name, c.payment_fee_pct AS fee_pct, c.payment_fee_type AS fee_type,
+            COALESCE(p.fees, 0) AS fees, COALESCE(p.received, 0) AS received
+       FROM invoices i
+       LEFT JOIN (SELECT invoice_id, SUM(fee) AS fees, SUM(amount) AS received FROM payments WHERE company_id=$1 GROUP BY invoice_id) p ON p.invoice_id=i.id LEFT JOIN contacts c ON c.id=i.contact_id WHERE ${where} ORDER BY i.date DESC, i.id DESC LIMIT 500`, vals
   );
   res.json(rows);
 });
