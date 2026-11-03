@@ -76,6 +76,9 @@ export default function InvoiceView({ quote }) {
               : <Link to={`/recurrentes/nuevo?desde=${id}`} className="btn-outline"><Repeat size={15} /> Hacer recurrente</Link>
           )}
           {!quote && inv.contact_id && <Link to={`/clientes/${inv.contact_id}/estado`} className="btn-ghost" title="Estado de cuenta del cliente"><ScrollText size={15} /></Link>}
+          {inv.status !== 'draft' && can('operator') && (quote ? ['issued', 'rejected'] : inv.doc_type === 'invoice' ? ['issued', 'partial', 'paid'] : []).includes(inv.status) && (
+            <Link to={`${base}/${id}/editar`} className="btn-outline"><Pencil size={15} /> Editar</Link>
+          )}
           {!quote && !['void', 'draft'].includes(inv.status) && can('accountant') && (
             <button className="btn-danger" onClick={() => setVoiding(true)}><Ban size={15} /> Anular</button>
           )}

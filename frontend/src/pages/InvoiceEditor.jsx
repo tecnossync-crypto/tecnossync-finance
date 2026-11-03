@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, UserPlus, Send, Repeat } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, UserPlus, Send, Repeat, Check } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money, today, addDays, round2 } from '../lib/format';
@@ -30,6 +30,7 @@ export default function InvoiceEditor({ quote, recurring }) {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(!id && !fromInvoice);
   const [terms, setTerms] = useState(30);
+  const [issued, setIssued] = useState(null); // documento ya emitido que se está corrigiendo
   const [form, setForm] = useState({
     contact_id: '', date: today(), due_date: addDays(today(), 30), ncf_type: company.is_formal ? 'B02' : '',
     income_type: '01', itbis_retention_pct: 0, isr_retention_pct: 0, notes: '', payment_terms: '', items: [blankLine()],
@@ -59,6 +60,7 @@ export default function InvoiceEditor({ quote, recurring }) {
     const src = recurring ? fromInvoice : id;
     if (!src || (recurring && id)) return;
     api.get(`/invoices/${src}`).then((inv) => {
+      if (!recurring && !creditNote && inv.status !== 'draft') setIssued(inv);
       const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
       setForm({
         contact_id: inv.contact_id || '', date: creditNote ? today() : inv.date, due_date: inv.due_date || '',
@@ -115,7 +117,7 @@ export default function InvoiceEditor({ quote, recurring }) {
       const body = { ...form, issue, doc_type: quote ? 'quote' : creditNote ? 'credit_note' : 'invoice', ref_invoice_id: creditNote ? Number(id) : undefined,
         items: form.items.map((l) => ({ ...l, itbis_rate: l.itbis_rate ?? defaultRate })) };
       const inv = id && !creditNote ? await api.put(`/invoices/${id}`, body) : await api.post('/invoices', body);
-      toast(issue ? (quote ? 'Cotización lista' : 'Factura emitida y contabilizada') : 'Borrador guardado');
+      toast(issued ? (quote ? 'Cotización actualizada' : 'Factura corregida') : issue ? (quote ? 'Cotización lista' : 'Factura emitida y contabilizada') : 'Borrador guardado');
       navigate(`${base}/${inv.id}`, { replace: true });
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
@@ -134,12 +136,22 @@ export default function InvoiceEditor({ quote, recurring }) {
         <div className="flex gap-2">
           {recurring ? (
             <button className="btn-primary" disabled={busy} onClick={() => save(true)}><Repeat size={15} /> Guardar cobro</button>
+          ) : issued ? (
+            <button className="btn-primary" disabled={busy} onClick={() => save(false)}><Check size={15} /> Guardar cambios</button>
           ) : <>
             <button className="btn-outline" disabled={busy} onClick={() => save(false)}>Guardar borrador</button>
             <button className="btn-primary" disabled={busy} onClick={() => save(true)}><Send size={15} /> {quote ? 'Guardar y enviar' : 'Emitir'}</button>
           </>}
         </div>
       </div>
+
+      {issued && !quote && (
+        <div className="mb-4 rounded-xl bg-warn-50 text-warn px-4 py-3 text-[13px] leading-relaxed">
+          <b>Estás corrigiendo una factura ya emitida.</b> Conserva su número{issued.ncf ? ` y NCF (${issued.ncf})` : ''} y su contabilidad se rehace sola.
+          {issued.payments.length > 0 && ` Tiene ${issued.payments.length} cobro(s) registrado(s): el nuevo neto no puede quedar por debajo de lo cobrado ni se puede cambiar la moneda.`}
+          {issued.ncf && ' Si ya enviaste el 607 de ese mes a la DGII, recuerda enviarlo de nuevo.'}
+        </div>
+      )}
 
       <div className="grid xl:grid-cols-[1fr_340px] gap-4 items-start">
         <div className="space-y-4">
@@ -157,8 +169,8 @@ export default function InvoiceEditor({ quote, recurring }) {
                   <button type="button" onClick={() => setNewContact(true)} className="btn-outline px-3" title="Nuevo cliente"><UserPlus size={16} /></button>
                 </div>
               </Field>
-              <CurrencySelect value={form.currency} disabled={creditNote} onChange={(c) => set({ currency: c, exchange_rate: c === 'USD' ? (form.exchange_rate || usdRate || '') : '' })} />
-              {form.currency === 'USD' && !recurring && <RateField value={form.exchange_rate} disabled={creditNote} onChange={(v) => set({ exchange_rate: v })} />}
+              <CurrencySelect value={form.currency} disabled={creditNote || issued?.payments.length > 0} onChange={(c) => set({ currency: c, exchange_rate: c === 'USD' ? (form.exchange_rate || usdRate || '') : '' })} />
+              {form.currency === 'USD' && !recurring && <RateField value={form.exchange_rate} disabled={creditNote || issued?.payments.length > 0} onChange={(v) => set({ exchange_rate: v })} />}
               {form.currency === 'USD' && recurring && <p className="sm:col-span-2 lg:col-span-3 self-end text-[12.5px] text-text-muted pb-2">Cada factura se genera en dólares con la última tasa que registraste{usdRate ? ` (hoy ${usdRate})` : ''}. Puedes actualizarla en Ajustes.</p>}
               {recurring ? <RecurringFields form={form} set={set} /> : <>
               <Field label="Fecha"><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value, due_date: addDays(e.target.value, terms) })} /></Field>
@@ -176,7 +188,7 @@ export default function InvoiceEditor({ quote, recurring }) {
               {company.is_formal && !quote && (
                 <>
                   <Field label="Tipo de comprobante" className="sm:col-span-2">
-                    <Select value={form.ncf_type} onChange={(e) => set({ ncf_type: e.target.value })}>
+                    <Select value={form.ncf_type} disabled={!!issued?.ncf} onChange={(e) => set({ ncf_type: e.target.value })}>
                       {ncfOptions.map((n) => <option key={n.code} value={n.code}>{n.code} — {n.label}</option>)}
                     </Select>
                   </Field>

@@ -169,12 +169,67 @@ router.post('/', allow('operator'), async (req, res) => {
   res.json(await loadInvoice({ query }, req.cid, id));
 });
 
-// Editar solo borradores
+// Corrige una factura ya emitida: conserva número y NCF, rehace su asiento contable y respeta lo ya cobrado
+async function editIssued(client, req, cur, b) {
+  const { rows: [cn] } = await client.query(
+    `SELECT 1 FROM invoices WHERE ref_invoice_id=$1 AND company_id=$2 AND doc_type='credit_note' AND status NOT IN ('draft','void')`, [cur.id, req.cid]);
+  if (cn) throw new AppError(400, 'Esta factura tiene notas de crédito aplicadas; corrígela con otra nota de crédito');
+  if (cur.payments.length && ((b.currency || cur.currency) !== cur.currency || (cur.currency === 'USD' && b.exchange_rate && round4(b.exchange_rate) !== Number(cur.exchange_rate)))) {
+    throw new AppError(400, 'Ya tiene cobros registrados: no se puede cambiar la moneda ni la tasa. Elimina los cobros primero');
+  }
+  const money = cur.payments.length
+    ? { currency: cur.currency, exchange_rate: Number(cur.exchange_rate) }
+    : await currencyOf(client, req, b);
+  const t = computeTotals(req.company, b.items, b);
+  const paid = Number(cur.paid);
+  const receivable = round(t.total - t.itbis_retained - t.isr_retained);
+  if (receivable < paid - 0.001) throw new AppError(400, `El nuevo neto (${receivable.toFixed(2)}) es menor que lo ya cobrado (${paid.toFixed(2)}). Elimina o ajusta los cobros primero`);
+  if (b.contact_id) {
+    const { rows } = await client.query('SELECT 1 FROM contacts WHERE id=$1 AND company_id=$2', [b.contact_id, req.cid]);
+    if (!rows[0]) throw new AppError(400, 'Cliente inválido');
+  }
+  if (cur.ncf && ['B01', 'B14', 'B15', 'E31', 'E44', 'E45'].includes(cur.ncf_type) && !b.contact_id) {
+    throw new AppError(400, 'Este tipo de comprobante requiere un cliente con RNC');
+  }
+  const status = cur.doc_type === 'quote' ? cur.status : paid > 0 && paid >= receivable - 0.001 ? 'paid' : paid > 0 ? 'partial' : 'issued';
+  await client.query(
+    `UPDATE invoices SET contact_id=$3, date=$4, due_date=$5, income_type=$6, payment_terms=$7, subtotal=$8, discount=$9, itbis=$10,
+        itbis_retained=$11, isr_retained=$12, total=$13, notes=$14, currency=$15, exchange_rate=$16, status=$17 WHERE id=$1 AND company_id=$2`,
+    [cur.id, req.cid, b.contact_id || null, b.date || cur.date, b.due_date || null, b.income_type || cur.income_type || '01', b.payment_terms || null,
+      t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null, money.currency, money.exchange_rate, status]
+  );
+  await replaceItems(client, req.cid, cur.id, t.lines);
+  if (cur.doc_type === 'quote') return;
+  // el asiento viejo queda anulado (visible para auditoría) y se crea uno nuevo con los datos corregidos
+  await reverseSource(client, req.cid, 'invoice', cur.id, today(), req.user.id);
+  const { rows: [inv] } = await client.query('SELECT * FROM invoices WHERE id=$1 AND company_id=$2', [cur.id, req.cid]);
+  const { rows: items } = await client.query(
+    `SELECT ii.*, p.income_account_id FROM invoice_items ii LEFT JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=$1 AND ii.company_id=$2`, [cur.id, req.cid]);
+  await postInvoice(client, req.company, inv, items, req.user.id);
+}
+
+async function replaceItems(client, cid, invoiceId, lines) {
+  await client.query('DELETE FROM invoice_items WHERE invoice_id=$1 AND company_id=$2', [invoiceId, cid]);
+  for (const l of lines) {
+    await client.query(
+      `INSERT INTO invoice_items (company_id, invoice_id, product_id, description, qty, price, discount, itbis_rate, itbis, total, kind)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [cid, invoiceId, l.product_id, l.description, l.qty, l.price, l.discount, l.itbis_rate, l.itbis, l.total, l.kind]
+    );
+  }
+}
+
+// Borradores se editan libremente; facturas emitidas y cotizaciones enviadas se corrigen con editIssued
 router.put('/:id', allow('operator'), async (req, res) => {
   const b = req.body;
   const id = await tx(async (client) => {
     const cur = await loadInvoice(client, req.cid, req.params.id);
-    if (cur.status !== 'draft') throw new AppError(400, 'Solo se pueden editar borradores');
+    if (cur.status !== 'draft') {
+      const editable = cur.doc_type === 'invoice' ? ['issued', 'partial', 'paid'] : cur.doc_type === 'quote' ? ['issued', 'rejected'] : [];
+      if (!editable.includes(cur.status)) throw new AppError(400, cur.status === 'void' ? 'Una factura anulada no se puede editar' : 'Este documento no se puede editar');
+      await editIssued(client, req, cur, b);
+      return cur.id;
+    }
     const t = computeTotals(req.company, b.items, b);
     const money = await currencyOf(client, req, { ...b, ref_invoice_id: cur.ref_invoice_id });
     await client.query(
@@ -184,14 +239,7 @@ router.put('/:id', allow('operator'), async (req, res) => {
         b.income_type || '01', b.payment_terms || null, t.subtotal, t.discount, t.itbis, t.itbis_retained, t.isr_retained, t.total, b.notes || null,
         money.currency, money.exchange_rate]
     );
-    await client.query('DELETE FROM invoice_items WHERE invoice_id=$1 AND company_id=$2', [cur.id, req.cid]);
-    for (const l of t.lines) {
-      await client.query(
-        `INSERT INTO invoice_items (company_id, invoice_id, product_id, description, qty, price, discount, itbis_rate, itbis, total, kind)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [req.cid, cur.id, l.product_id, l.description, l.qty, l.price, l.discount, l.itbis_rate, l.itbis, l.total, l.kind]
-      );
-    }
+    await replaceItems(client, req.cid, cur.id, t.lines);
     if (b.issue) await issue(client, req, { ...cur, ...b, ...t, ...money, id: cur.id, doc_type: cur.doc_type, date: b.date || cur.date });
     return cur.id;
   });
